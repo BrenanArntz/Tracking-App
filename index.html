@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evangelism Tracker</title>
+  
+  <!-- PWA & Mobile Add to Home Screen Support -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  
+  <!-- iOS / Apple Add to Home Screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="EV Tracker">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- LOGIN SCREEN -->
+    <section id="auth-screen" class="screen active">
+      <div class="card">
+        <img class="login-logo" src="icons/icon-192.png" alt="Evangelism Tracker logo">
+        <h2>Evangelism Tracker</h2>
+        <p class="subtitle">Log in to track your conversations & outings</p>
+        
+        <form id="login-form">
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" placeholder="Email">
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Password">
+          </div>
+
+          <!-- LOCAL TESTING ROLE SELECTOR -->
+          <div class="form-group" style="background: #eff6ff; padding: 12px; border-radius: 10px; border: 1px dashed #2563eb;">
+            <label for="test-role" style="color: #2563eb;">[Test Mode] Select Active User:</label>
+            <select id="test-role">
+              <option value="john_member">John Smith (Member)</option>
+              <option value="sarah_admin">Sarah Jenkins (Admin)</option>
+              <option value="mark_director">Pastor Mark (Director - Metro Group)</option>
+              <option value="super_admin">System Admin (Full Access)</option>
+            </select>
+          </div>
+          
+          <button type="submit" class="btn primary">Sign In</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- MAIN APP DASHBOARD -->
+    <section id="dashboard-screen" class="screen">
+      <header class="app-header">
+        <div class="app-brand">
+          <img class="app-logo" src="icons/icon-192.png" alt="Profile photo">
+          <div>
+            <h1 id="user-display-name">Evangelism Tracker</h1>
+            <span id="group-badge" class="badge group-tag">Metro Ministry</span>
+            <span id="role-badge" class="badge">Member</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <img class="header-logo" src="icons/icon-192.png" alt="Evangelism Tracker logo">
+          <button id="logout-btn" class="btn-text">Log Out</button>
+        </div>
+      </header>
+
+      <!-- NAVIGATION TABS -->
+      <nav class="tab-bar">
+        <button class="tab-btn active" data-tab="tab-tracker">Chat Log</button>
+        <button class="tab-btn" data-tab="tab-calendar">Calendar</button>
+        <button class="tab-btn" data-tab="tab-resources">Resources</button>
+        <button class="tab-btn" id="nav-team-tab" data-tab="tab-team" style="display: none;">Our Team</button>
+        <button class="tab-btn" id="nav-admin-tab" data-tab="tab-admin" style="display: none;">System Admin</button>
+      </nav>
+
+      <main class="content">
+
+        <!-- TAB 1: CHAT LOG -->
+        <div id="tab-tracker" class="tab-content active">
+          <div class="card">
+            <h3>Log New Conversation</h3>
+            <form id="tracker-form">
+              <div class="form-group">
+                <label for="person-name">Person's Name / Details</label>
+                <input type="text" id="person-name" placeholder="e.g., John at the park" required>
+              </div>
+
+              <div class="form-group">
+                <label for="chat-date">Date</label>
+                <input type="date" id="chat-date" required>
+              </div>
+
+              <div class="form-group">
+                <label>Participating Evangelists</label>
+                <div id="evangelists-checkbox-group" class="checkbox-group"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="chat-progress">Conversation Progress</label>
+                <select id="chat-progress">
+                  <option value="0">0 - No Progress</option>
+                  <option value="1">1 - God's Existence</option>
+                  <option value="2">2 - Law</option>
+                  <option value="3">3 - False Ways</option>
+                  <option value="4">4 - Gospel</option>
+                  <option value="5">5 - Checking Questions</option>
+                  <option value="6">6 - Complete (Not Professing)</option>
+                  <option value="7">7 - Complete (Not Professing)</option>
+                  <option value="8">8 - Already a Believer</option>
+                </select>
+              </div>
+
+              <div class="form-group conditional-counter" id="heard-gospel-row" style="display: none;">
+                <label for="heard-gospel-count">How many heard the Gospel?</label>
+                <input type="number" id="heard-gospel-count" min="0" step="1" value="1">
+              </div>
+
+              <div class="form-group conditional-counter" id="professed-row" style="display: none;">
+                <label for="professed-count">How many professed?</label>
+                <input type="number" id="professed-count" min="0" step="1" value="1">
+              </div>
+
+              <div class="form-group">
+                <label for="chat-photo">Add Photo (Optional)</label>
+                <div class="photo-upload-row">
+                  <input type="file" id="chat-photo" accept="image/*">
+                  <button type="button" id="clear-chat-photo" class="btn-text small danger" style="display: none;">Delete Photo</button>
+                </div>
+                <input type="hidden" id="chat-photo-delete" value="false">
+              </div>
+
+              <div class="form-group">
+                <label for="chat-notes">Notes</label>
+                <textarea id="chat-notes" rows="3" placeholder="What did you discuss?"></textarea>
+              </div>
+
+              <button type="submit" class="btn primary">Save Log</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Chat Log</h3>
+            <ul id="log-list" class="log-list">
+              <li class="empty-state">No conversations logged yet.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- TAB 2: CALENDAR -->
+        <div id="tab-calendar" class="tab-content">
+          <div class="card" id="add-event-card" style="display: none;">
+            <h3>Schedule Evangelism Outing</h3>
+            <form id="event-form">
+              <div class="form-group">
+                <label for="event-title">Event Title</label>
+                <input type="text" id="event-title" placeholder="e.g., Downtown Park Outreach" required>
+              </div>
+              <div class="form-group-row">
+                <div class="form-group flex-1">
+                  <label for="event-date">Date & Time</label>
+                  <input type="datetime-local" id="event-date" required>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="event-status">Status</label>
+                  <select id="event-status">
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Tentative">Tentative</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="event-location">Location</label>
+                <input type="text" id="event-location" placeholder="e.g., Main Square Pavilion" required>
+              </div>
+              <div class="form-group">
+                <label for="event-description">Description & Instructions</label>
+                <textarea id="event-description" rows="2" placeholder="Meeting point, what to bring..."></textarea>
+              </div>
+              <button type="submit" class="btn primary">Add Event</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Upcoming Local Outings</h3>
+            <div id="calendar-event-list" class="event-list">
+              <p class="empty-state">No upcoming events scheduled for your group.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: RESOURCES -->
+        <div id="tab-resources" class="tab-content">
+          <div class="card" id="add-resource-card" style="display: none;">
+            <h3>Add Group Resource</h3>
+            <form id="resource-form">
+              <div class="form-group">
+                <label for="resource-title">Resource Title</label>
+                <input type="text" id="resource-title" placeholder="e.g., Gospel Presentation Slides" required>
+              </div>
+              <div class="form-group">
+                <label for="resource-url">Document / Slides Link (URL)</label>
+                <input type="url" id="resource-url" placeholder="https://docs.google.com/..." required>
+              </div>
+              <div class="form-group">
+                <label for="resource-desc">Description (Optional)</label>
+                <input type="text" id="resource-desc" placeholder="Brief outline of this material">
+              </div>
+              <button type="submit" class="btn primary">Add Resource</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Group Training & Resource Library</h3>
+            <ul id="resource-list" class="log-list">
+              <li class="empty-state">No resources available.</li>
+            </ul>
+          </div>
+
+          <p class="homescreen-note">Tip: Download this app to your home screen for quick access anytime.</p>
+        </div>
+
+        <!-- TAB 4: TEAM ROSTER -->
+        <div id="tab-team" class="tab-content">
+          <div class="card team-stats-card" aria-labelledby="team-stats-title">
+            <div class="team-stats-heading">
+              <div>
+                <p class="eyebrow">Team-wide snapshot</p>
+                <h3 id="team-stats-title">Our Team Stats</h3>
+              </div>
+              <div class="stats-period-picker">
+                <button id="stats-period-button" class="stats-period" type="button" aria-expanded="false" aria-controls="stats-period-menu">
+                  All time <span aria-hidden="true">&#x2304;</span>
+                </button>
+                <div id="stats-period-menu" class="stats-period-menu" role="menu" hidden>
+                  <button type="button" role="menuitem" data-stats-range="all">All time</button>
+                  <button type="button" role="menuitem" data-stats-range="six-months">Last 6 months</button>
+                  <button type="button" role="menuitem" data-stats-range="month">Last month</button>
+                  <button type="button" role="menuitem" data-stats-range="week">Last week</button>
+                  <button type="button" role="menuitem" data-stats-range="today">Today</button>
+                </div>
+              </div>
+            </div>
+            <p class="subtitle">A shared view of the conversations and Gospel outreach recorded by your team.</p>
+
+            <div class="stats-summary-grid" aria-label="Team outreach totals">
+              <div class="stat-tile">
+                <span class="stat-label">Conversations</span>
+                <strong id="stat-total-conversations" class="stat-value">0</strong>
+                <span class="stat-detail">logged by the team</span>
+              </div>
+              <div class="stat-tile stat-tile-gospel">
+                <span class="stat-label">Heard the Gospel</span>
+                <strong id="stat-heard-gospel" class="stat-value">0</strong>
+                <span class="stat-detail">people reached</span>
+              </div>
+              <div class="stat-tile stat-tile-professed">
+                <span class="stat-label">Professions</span>
+                <strong id="stat-professions" class="stat-value">0</strong>
+                <span class="stat-detail">recorded by the team</span>
+              </div>
+            </div>
+
+            <div class="stats-rate-row">
+              <div>
+                <h4>Gospel Reach Rate</h4>
+                <p>Conversations that reached the Gospel stage.</p>
+              </div>
+              <strong id="stat-gospel-reach-rate">0%</strong>
+            </div>
+
+            <div class="stats-breakdown">
+              <div class="stats-breakdown-header">
+                <h4>Conversation Progress</h4>
+                <span id="stat-progress-total">0 conversations</span>
+              </div>
+              <div id="stats-progress-list" class="stats-progress-list" aria-label="Conversation progress breakdown"></div>
+            </div>
+          </div>
+
+          <div class="card" id="rename-team-card" style="display: none;">
+            <h3>Change Team Name</h3>
+            <p class="subtitle">Your chats, calendar, resources, and members will stay with this team.</p>
+            <form id="rename-team-form">
+              <div class="form-group-row">
+                <div class="form-group flex-1">
+                  <label for="team-name">Team Name</label>
+                  <input type="text" id="team-name" required>
+                </div>
+                <div class="form-group form-submit-group">
+                  <label>&nbsp;</label>
+                  <button type="submit" class="btn primary">Save Name</button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div class="card" id="add-member-card">
+            <h3>Add Member to Team</h3>
+            <form id="add-member-form">
+              <div class="form-group">
+                <label for="member-name">Full Name</label>
+                <input type="text" id="member-name" placeholder="e.g., Alex Johnson" required>
+              </div>
+              <div class="form-group">
+                <label for="member-email">Member Email</label>
+                <input type="email" id="member-email" placeholder="newmember@church.com" required>
+              </div>
+              <div class="form-group">
+                <label for="member-role">Assign Role</label>
+                <select id="member-role">
+                  <option value="member">Member</option>
+                  <option value="admin">Team Lead / Admin</option>
+                </select>
+              </div>
+              <button type="submit" class="btn primary">Add Member</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Local Group Roster</h3>
+            <ul id="team-list" class="log-list">
+              <li class="empty-state">No team members listed yet.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- TAB 5: SUPER ADMIN PANEL -->
+        <div id="tab-admin" class="tab-content">
+          <div class="card">
+            <h3>Appoint New Director & Create Group</h3>
+            <form id="appoint-director-form">
+              <div class="form-group">
+                <label for="director-name">Director Name</label>
+                <input type="text" id="director-name" placeholder="Pastor Mark" required>
+              </div>
+              <div class="form-group">
+                <label for="director-email">Director Email</label>
+                <input type="email" id="director-email" placeholder="leader@citychurch.com" required>
+              </div>
+              <div class="form-group">
+                <label for="group-name">Local Group / City Name</label>
+                <input type="text" id="group-name" placeholder="e.g., Metro Ministry Group" required>
+              </div>
+              <button type="submit" class="btn primary">Create Group & Appoint Director</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>All Active Directors & Groups</h3>
+            <ul id="director-list" class="log-list">
+              <li class="empty-state">No directors assigned yet.</li>
+            </ul>
+          </div>
+        </div>
+
+      </main>
+    </section>
+
+    <!-- LOG EDIT MODAL -->
+    <div id="edit-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Edit Conversation Log</h3>
+          <button id="close-modal-btn" class="btn-text">&times;</button>
+        </div>
+        <form id="edit-tracker-form">
+          <input type="hidden" id="edit-log-id">
+          <div class="form-group">
+            <label for="edit-person-name">Person's Name / Details</label>
+            <input type="text" id="edit-person-name" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-chat-date">Date</label>
+            <input type="date" id="edit-chat-date" required>
+          </div>
+          <div class="form-group">
+            <label>Participating Evangelists</label>
+            <div id="edit-evangelists-checkbox-group" class="checkbox-group"></div>
+          </div>
+          <div class="form-group">
+            <label for="edit-chat-progress">Conversation Progress</label>
+            <select id="edit-chat-progress">
+              <option value="0">0 - No Progress</option>
+              <option value="1">1 - God's Existence</option>
+              <option value="2">2 - Law</option>
+              <option value="3">3 - False Ways</option>
+              <option value="4">4 - Gospel</option>
+              <option value="5">5 - Checking Questions</option>
+              <option value="6">6 - Complete (Not Professing)</option>
+              <option value="7">7 - Complete (Not Professing)</option>
+              <option value="8">8 - Already a Believer</option>
+            </select>
+          </div>
+          <div class="form-group conditional-counter" id="edit-heard-gospel-row" style="display: none;">
+            <label for="edit-heard-gospel-count">How many heard the Gospel?</label>
+            <input type="number" id="edit-heard-gospel-count" min="0" step="1" value="1">
+          </div>
+          <div class="form-group conditional-counter" id="edit-professed-row" style="display: none;">
+            <label for="edit-professed-count">How many professed?</label>
+            <input type="number" id="edit-professed-count" min="0" step="1" value="1">
+          </div>
+          <div class="form-group">
+            <label for="edit-chat-photo">Replace Photo (Optional)</label>
+            <div class="photo-upload-row">
+              <input type="file" id="edit-chat-photo" accept="image/*">
+              <button type="button" id="clear-edit-chat-photo" class="btn-text small danger" style="display: none;">Delete Photo</button>
+            </div>
+            <input type="hidden" id="edit-chat-photo-delete" value="false">
+            <div id="edit-photo-preview-wrap" class="photo-preview-wrap" style="display: none;">
+              <img id="edit-photo-preview" class="photo-preview" alt="Current conversation photo" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-chat-notes">Notes</label>
+            <textarea id="edit-chat-notes" rows="3"></textarea>
+          </div>
+          <button type="submit" class="btn primary">Update Log</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- EVENT EDIT MODAL -->
+    <div id="edit-event-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Edit Evangelism Outing</h3>
+          <button id="close-event-modal-btn" class="btn-text">&times;</button>
+        </div>
+        <form id="edit-event-form">
+          <input type="hidden" id="edit-event-id">
+          <div class="form-group">
+            <label for="edit-event-title">Event Title</label>
+            <input type="text" id="edit-event-title" required>
+          </div>
+          <div class="form-group-row">
+            <div class="form-group flex-1">
+              <label for="edit-event-date">Date & Time</label>
+              <input type="datetime-local" id="edit-event-date" required>
+            </div>
+            <div class="form-group flex-1">
+              <label for="edit-event-status">Status</label>
+              <select id="edit-event-status">
+                <option value="Confirmed">Confirmed</option>
+                <option value="Tentative">Tentative</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="edit-event-location">Location</label>
+            <input type="text" id="edit-event-location" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-event-description">Description & Instructions</label>
+            <textarea id="edit-event-description" rows="2"></textarea>
+          </div>
+          <button type="submit" class="btn primary">Update Event</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- RESOURCE EDIT MODAL -->
+    <div id="edit-resource-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Edit Resource</h3>
+          <button id="close-resource-modal-btn" class="btn-text">&times;</button>
+        </div>
+        <form id="edit-resource-form">
+          <input type="hidden" id="edit-resource-id">
+          <div class="form-group">
+            <label for="edit-resource-title">Resource Title</label>
+            <input type="text" id="edit-resource-title" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-resource-url">Resource Link (URL)</label>
+            <input type="url" id="edit-resource-url" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-resource-desc">Description</label>
+            <input type="text" id="edit-resource-desc">
+          </div>
+          <button type="submit" class="btn primary">Update Resource</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- USER EDIT MODAL (FOR SUPER ADMIN & DIRECTORS) -->
+    <div id="edit-user-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Edit User Account</h3>
+          <button id="close-user-modal-btn" class="btn-text">&times;</button>
+        </div>
+        <form id="edit-user-form">
+          <input type="hidden" id="edit-user-id">
+          <div class="form-group">
+            <label for="edit-user-name">Full Name</label>
+            <input type="text" id="edit-user-name" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-user-email">Email Address</label>
+            <input type="email" id="edit-user-email" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-user-role">Role</label>
+            <select id="edit-user-role">
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="director">Director</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edit-user-group">Local Group</label>
+            <input type="text" id="edit-user-group" required>
+          </div>
+          <button type="submit" class="btn primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
