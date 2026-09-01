@@ -1596,24 +1596,31 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
 
       if (!groupId) throw new Error('The selected team could not be found.');
 
-      if (!window.inviteUser) {
-        throw new Error('Authentication setup is not available.');
-      }
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: newMemberId,
+          full_name: newMemberName,
+          email: newMemberEmail,
+          role: newMemberRole,
+          group_id: groupId,
+          auth_user_id: null
+        }]);
 
-      const authResult = await window.inviteUser(
-        newMemberEmail,
-        newMemberName,
-        newMemberRole,
-        groupId,
-        newMemberId
-      );
-      if (!authResult.ok) {
-        throw new Error(`Invitation could not be sent: ${authResult.message}`);
+      if (insertError) {
+        throw new Error(insertError.message);
+      } else {
+        console.log('User saved to Supabase:', newMemberId);
+        if (window.sendPasswordSetupEmail) {
+          const emailRes = await window.sendPasswordSetupEmail(newMemberEmail);
+          if (emailRes.ok) {
+            alert(`Member added! An email invitation to create a password was sent to ${newMemberEmail}.`);
+          } else {
+            console.warn('Password invite email status:', emailRes.message);
+            alert(`Member added, but password setup email could not be sent: ${emailRes.message}`);
+          }
+        }
       }
-
-      const authUserId = authResult.data.user.id;
-      console.log('User saved to Supabase:', newMemberId, authUserId);
-      alert(`Member added! An email invitation to create a password was sent to ${newMemberEmail}.`);
     } catch (err) {
       console.warn('Supabase error:', err.message);
       alert(`Member was not added: ${err.message}`);
@@ -1808,19 +1815,12 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
         }
       }
 
-      if (!window.inviteUser) {
-        throw new Error('Authentication setup is not available.');
-      }
+      const { error: insertUserError } = await supabase
+        .from('users')
+        .insert([{ id: directorId, full_name: directorName, email: directorEmail, role: 'director', group_id: resolvedGroupId }]);
 
-      const inviteResult = await window.inviteUser(
-        directorEmail,
-        directorName,
-        'director',
-        resolvedGroupId,
-        directorId
-      );
-      if (!inviteResult.ok) {
-        throw new Error(`Director invitation could not be sent: ${inviteResult.message}`);
+      if (insertUserError) {
+        console.warn('Supabase director insert failed:', insertUserError.message);
       }
 
       const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
@@ -1863,8 +1863,14 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
 
     document.getElementById('appoint-director-form').reset();
 
-    if (supabase) {
-      alert(`Group created & director appointed! An email invitation to create a password was sent to ${directorEmail}.`);
+    if (window.sendPasswordSetupEmail && supabase) {
+      const emailRes = await window.sendPasswordSetupEmail(directorEmail);
+      if (emailRes.ok) {
+        alert(`Group created & director appointed! An email invitation to create a password was sent to ${directorEmail}.`);
+      } else {
+        console.warn('Password invite email status:', emailRes.message);
+        alert(`Director & group created, but password setup email could not be sent: ${emailRes.message}`);
+      }
     }
 
     await renderSuperAdminPanel();
@@ -2294,20 +2300,62 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 };
 
 // --- PASSWORD SETUP MODAL HANDLER (EMAIL LINK REDIRECT) ---
-function checkPasswordSetupRedirect() {
-  const hash = window.location.hash || '';
-  if (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('access_token')) {
+async function checkPasswordSetupRedirect() {
+  const hash = (window.location.hash || '').replace(/^#/, '');
+  const search = window.location.search || '';
+  const hashParams = new URLSearchParams(hash);
+  const searchParams = new URLSearchParams(search.replace(/^\?/, ''));
+  const error = searchParams.get('error') || hashParams.get('error');
+  const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+
+  if (error === 'access_denied' || errorCode === 'otp_expired') {
+    const setModal = document.getElementById('set-password-modal');
+    if (setModal) setModal.classList.remove('active');
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+    alert('This invite link has expired or was already used. Please ask for a new invitation.');
+    return;
+  }
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase && (search.includes('code=') || hash.includes('code='))) {
+    const redirectResult = await window.handleSupabaseAuthRedirect();
+    if (!redirectResult.ok) {
+      console.warn('Supabase redirect handling failed:', redirectResult.message);
+    }
+  }
+
+  const validAuthFlow = hash.includes('type=recovery')
+    || hash.includes('type=invite')
+    || hash.includes('type=magiclink')
+    || hash.includes('type=signup')
+    || hash.includes('access_token')
+    || hash.includes('code=')
+    || search.includes('code=');
+
+  if (validAuthFlow) {
     const setModal = document.getElementById('set-password-modal');
     if (setModal) setModal.classList.add('active');
   }
 }
 
-window.addEventListener('DOMContentLoaded', checkPasswordSetupRedirect);
+window.addEventListener('DOMContentLoaded', () => {
+  checkPasswordSetupRedirect();
+});
 
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    const validAuthFlow = hash.includes('type=recovery')
+      || hash.includes('type=invite')
+      || hash.includes('type=magiclink')
+      || hash.includes('type=signup')
+      || hash.includes('access_token')
+      || hash.includes('code=');
+
+    if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && validAuthFlow)) {
       const setModal = document.getElementById('set-password-modal');
       if (setModal) setModal.classList.add('active');
     }
