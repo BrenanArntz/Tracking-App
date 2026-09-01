@@ -56,33 +56,27 @@ async function signUpUser(email, password) {
   return { ok: true, data };
 }
 
-function generateTemporaryPassword() {
-  const bytes = new Uint8Array(18);
-  crypto.getRandomValues(bytes);
-  return `Evangelism-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
-}
-
-async function createAuthUserForInvite(email) {
+async function inviteUser(email, fullName, role, groupId, memberId) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const currentSession = sessionData.session;
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password: generateTemporaryPassword()
+  const { data, error } = await supabase.functions.invoke('invite-user', {
+    body: {
+      email,
+      fullName,
+      role,
+      groupId,
+      memberId,
+      redirectTo: window.location.origin + window.location.pathname
+    }
   });
-
-  if (currentSession && data.session && data.session.user.id !== currentSession.user.id) {
-    await supabase.auth.setSession(currentSession);
-  }
 
   if (error) {
     return { ok: false, message: error.message };
   }
 
-  if (!data.user) {
-    return { ok: false, message: 'Supabase did not return the new authentication user.' };
+  if (!data || !data.user) {
+    return { ok: false, message: data && data.message ? data.message : 'The invitation function did not return a user.' };
   }
 
   return { ok: true, data };
@@ -125,23 +119,6 @@ async function getCurrentAuthUser() {
   return user;
 }
 
-async function sendPasswordSetupEmail(email) {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const redirectUrl = window.location.origin + window.location.pathname;
-
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: redirectUrl
-  });
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  return { ok: true, data };
-}
-
 async function updateUserPassword(newPassword) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
@@ -160,9 +137,8 @@ async function updateUserPassword(newPassword) {
 window.getSupabaseClient = getSupabaseClient;
 window.testSupabaseConnection = testSupabaseConnection;
 window.signUpUser = signUpUser;
-window.createAuthUserForInvite = createAuthUserForInvite;
+window.inviteUser = inviteUser;
 window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
-window.sendPasswordSetupEmail = sendPasswordSetupEmail;
 window.updateUserPassword = updateUserPassword;

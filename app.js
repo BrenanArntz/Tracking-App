@@ -1596,42 +1596,24 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
 
       if (!groupId) throw new Error('The selected team could not be found.');
 
-      if (!window.createAuthUserForInvite) {
+      if (!window.inviteUser) {
         throw new Error('Authentication setup is not available.');
       }
 
-      const authResult = await window.createAuthUserForInvite(newMemberEmail);
+      const authResult = await window.inviteUser(
+        newMemberEmail,
+        newMemberName,
+        newMemberRole,
+        groupId,
+        newMemberId
+      );
       if (!authResult.ok) {
-        throw new Error(`Authentication user could not be created: ${authResult.message}`);
+        throw new Error(`Invitation could not be sent: ${authResult.message}`);
       }
 
       const authUserId = authResult.data.user.id;
-
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert([{
-          id: newMemberId,
-          full_name: newMemberName,
-          email: newMemberEmail,
-          role: newMemberRole,
-          group_id: groupId,
-          auth_user_id: authUserId
-        }]);
-
-      if (insertError) {
-        throw new Error(insertError.message);
-      } else {
-        console.log('User saved to Supabase:', newMemberId);
-        if (window.sendPasswordSetupEmail) {
-          const emailRes = await window.sendPasswordSetupEmail(newMemberEmail);
-          if (emailRes.ok) {
-            alert(`Member added! An email invitation to create a password was sent to ${newMemberEmail}.`);
-          } else {
-            console.warn('Password invite email status:', emailRes.message);
-            alert(`Member added, but password setup email could not be sent: ${emailRes.message}`);
-          }
-        }
-      }
+      console.log('User saved to Supabase:', newMemberId, authUserId);
+      alert(`Member added! An email invitation to create a password was sent to ${newMemberEmail}.`);
     } catch (err) {
       console.warn('Supabase error:', err.message);
       alert(`Member was not added: ${err.message}`);
@@ -1826,12 +1808,19 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
         }
       }
 
-      const { error: insertUserError } = await supabase
-        .from('users')
-        .insert([{ id: directorId, full_name: directorName, email: directorEmail, role: 'director', group_id: resolvedGroupId }]);
+      if (!window.inviteUser) {
+        throw new Error('Authentication setup is not available.');
+      }
 
-      if (insertUserError) {
-        console.warn('Supabase director insert failed:', insertUserError.message);
+      const inviteResult = await window.inviteUser(
+        directorEmail,
+        directorName,
+        'director',
+        resolvedGroupId,
+        directorId
+      );
+      if (!inviteResult.ok) {
+        throw new Error(`Director invitation could not be sent: ${inviteResult.message}`);
       }
 
       const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
@@ -1874,14 +1863,8 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
 
     document.getElementById('appoint-director-form').reset();
 
-    if (window.sendPasswordSetupEmail && supabase) {
-      const emailRes = await window.sendPasswordSetupEmail(directorEmail);
-      if (emailRes.ok) {
-        alert(`Group created & director appointed! An email invitation to create a password was sent to ${directorEmail}.`);
-      } else {
-        console.warn('Password invite email status:', emailRes.message);
-        alert(`Director & group created, but password setup email could not be sent: ${emailRes.message}`);
-      }
+    if (supabase) {
+      alert(`Group created & director appointed! An email invitation to create a password was sent to ${directorEmail}.`);
     }
 
     await renderSuperAdminPanel();
