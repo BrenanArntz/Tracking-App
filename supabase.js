@@ -129,7 +129,7 @@ async function sendPasswordSetupEmail(email) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const redirectUrl = window.location.origin + window.location.pathname;
+  const redirectUrl = 'https://brenanarntz.github.io/Tracking-App/';
 
   const { data, error } = await supabase.auth.signInWithOtp({
     email,
