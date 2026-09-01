@@ -1596,6 +1596,17 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
 
       if (!groupId) throw new Error('The selected team could not be found.');
 
+      if (!window.createAuthUserForInvite) {
+        throw new Error('Authentication setup is not available.');
+      }
+
+      const authResult = await window.createAuthUserForInvite(newMemberEmail);
+      if (!authResult.ok) {
+        throw new Error(`Authentication user could not be created: ${authResult.message}`);
+      }
+
+      const authUserId = authResult.data.user.id;
+
       const { error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -1603,7 +1614,8 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
           full_name: newMemberName,
           email: newMemberEmail,
           role: newMemberRole,
-          group_id: groupId
+          group_id: groupId,
+          auth_user_id: authUserId
         }]);
 
       if (insertError) {

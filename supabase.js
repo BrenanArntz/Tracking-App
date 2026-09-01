@@ -56,6 +56,38 @@ async function signUpUser(email, password) {
   return { ok: true, data };
 }
 
+function generateTemporaryPassword() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return `Evangelism-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function createAuthUserForInvite(email) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentSession = sessionData.session;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: generateTemporaryPassword()
+  });
+
+  if (currentSession && data.session && data.session.user.id !== currentSession.user.id) {
+    await supabase.auth.setSession(currentSession);
+  }
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  if (!data.user) {
+    return { ok: false, message: 'Supabase did not return the new authentication user.' };
+  }
+
+  return { ok: true, data };
+}
+
 async function signInUser(email, password) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
@@ -104,18 +136,7 @@ async function sendPasswordSetupEmail(email) {
   });
 
   if (error) {
-    const { data: otpData, error: otpError } = await supabase.auth.signInWithOtp({
-      email: email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: redirectUrl
-      }
-    });
-
-    if (otpError) {
-      return { ok: false, message: otpError.message };
-    }
-    return { ok: true, data: otpData };
+    return { ok: false, message: error.message };
   }
 
   return { ok: true, data };
@@ -139,6 +160,7 @@ async function updateUserPassword(newPassword) {
 window.getSupabaseClient = getSupabaseClient;
 window.testSupabaseConnection = testSupabaseConnection;
 window.signUpUser = signUpUser;
+window.createAuthUserForInvite = createAuthUserForInvite;
 window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
