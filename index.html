@@ -39,17 +39,11 @@
             <input type="password" id="password" placeholder="Password">
           </div>
 
-          <!-- LOCAL TESTING ROLE SELECTOR -->
-          <div class="form-group" style="background: #eff6ff; padding: 12px; border-radius: 10px; border: 1px dashed #2563eb;">
-            <label for="test-role" style="color: #2563eb;">[Test Mode] Select Active User:</label>
-            <select id="test-role">
-              <option value="john_member">John Smith (Member)</option>
-              <option value="sarah_admin">Sarah Jenkins (Admin)</option>
-              <option value="mark_director">Pastor Mark (Director - Metro Group)</option>
-              <option value="super_admin">System Admin (Full Access)</option>
-            </select>
-          </div>
-          
+          <label class="checkbox-label" for="stay-signed-in">
+            <input type="checkbox" id="stay-signed-in">
+            <span>Stay logged in</span>
+          </label>
+
           <button type="submit" class="btn primary">Sign In</button>
         </form>
       </div>

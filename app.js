@@ -31,142 +31,6 @@ function toLocalDateTimeInput(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// --- INITIAL SEED DATA (LOCAL STORAGE) ---
-function initSeedData() {
-  if (!localStorage.getItem('evangelism_team')) {
-    const defaultTeam = [
-      { id: 'john_member', name: 'John Smith', email: 'john@church.com', role: 'member', groupName: 'Metro Ministry' },
-      { id: 'sarah_admin', name: 'Sarah Jenkins', email: 'sarah@church.com', role: 'admin', groupName: 'Metro Ministry' },
-      { id: 'mark_director', name: 'Pastor Mark', email: 'mark@church.com', role: 'director', groupName: 'Metro Ministry' },
-      { id: 'super_admin', name: 'System Admin', email: 'admin@system.com', role: 'super_admin', groupName: 'System' }
-    ];
-    localStorage.setItem('evangelism_team', JSON.stringify(defaultTeam));
-  }
-
-  if (!localStorage.getItem('evangelism_logs')) {
-    const defaultLogs = [
-      {
-        id: 101,
-        authorId: 'john_member',
-        authorName: 'John Smith',
-        groupName: 'Metro Ministry',
-        name: 'David at the Park',
-        date: new Date().toISOString().split('T')[0],
-        evangelists: ['John Smith', 'Sarah Jenkins'],
-        notes: 'Shared testimony and prayed for his family.'
-      }
-    ];
-    localStorage.setItem('evangelism_logs', JSON.stringify(defaultLogs));
-  }
-
-  if (!localStorage.getItem('evangelism_events')) {
-    const defaultEvents = [
-      {
-        id: 201,
-        groupName: 'Metro Ministry',
-        title: 'Saturday Park Outreach',
-        datetime: toLocalDateTimeInput(new Date(Date.now() + 86400000 * 2)), // 2 days in future
-        status: 'Confirmed',
-        location: 'Central Park Pavilion',
-        description: 'Meeting by the main entrance. Handing out tracts and praying with people.',
-        rsvps: { 'john_member': 'going', 'sarah_admin': 'going' }
-      }
-    ];
-    localStorage.setItem('evangelism_events', JSON.stringify(defaultEvents));
-  }
-
-  if (!localStorage.getItem('evangelism_resources')) {
-    const defaultRes = [
-      { id: 301, groupName: 'Metro Ministry', title: DEFAULT_RESOURCES[0].title, url: DEFAULT_RESOURCES[0].url, desc: DEFAULT_RESOURCES[0].desc },
-      { id: 302, groupName: 'Metro Ministry', title: DEFAULT_RESOURCES[1].title, url: DEFAULT_RESOURCES[1].url, desc: DEFAULT_RESOURCES[1].desc }
-    ];
-    localStorage.setItem('evangelism_resources', JSON.stringify(defaultRes));
-  }
-}
-
-async function ensureSupabaseSeedData() {
-  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-  if (!supabase) return { ok: false, message: 'Supabase not configured.' };
-
-  try {
-    const { data: groups, error: groupsError } = await supabase.from('groups').select('*');
-    if (groupsError) {
-      return { ok: false, message: groupsError.message };
-    }
-
-    let metroGroup = (groups || []).find(group => group.name === 'Metro Ministry');
-
-    if (!metroGroup) {
-      const { data: insertedGroup, error: insertGroupError } = await supabase
-        .from('groups')
-        .insert([{ id: 'metro_ministry', name: 'Metro Ministry' }])
-        .select();
-
-      if (insertGroupError) {
-        return { ok: false, message: insertGroupError.message };
-      }
-
-      metroGroup = insertedGroup && insertedGroup[0];
-    }
-
-    const { data: users, error: usersError } = await supabase.from('users').select('*');
-    if (usersError) {
-      return { ok: false, message: usersError.message };
-    }
-
-    const defaultUsers = [
-      { id: 'john_member', full_name: 'John Smith', email: 'john@church.com', role: 'member', group_id: metroGroup.id || 'metro_ministry' },
-      { id: 'sarah_admin', full_name: 'Sarah Jenkins', email: 'sarah@church.com', role: 'admin', group_id: metroGroup.id || 'metro_ministry' },
-      { id: 'mark_director', full_name: 'Pastor Mark', email: 'mark@church.com', role: 'director', group_id: metroGroup.id || 'metro_ministry' },
-      { id: 'super_admin', full_name: 'System Admin', email: 'admin@system.com', role: 'super_admin', group_id: null }
-    ];
-
-    if (!users || users.length === 0) {
-      const { error: insertUsersError } = await supabase.from('users').insert(defaultUsers);
-      if (insertUsersError) {
-        return { ok: false, message: insertUsersError.message };
-      }
-    }
-
-    const { data: syncedUsers } = await supabase.from('users').select('id, full_name, email, role, group_id, groups(name)');
-    if (syncedUsers) {
-      const mapped = syncedUsers.map(user => ({
-        id: user.id,
-        name: user.full_name,
-        email: user.email,
-        role: user.role,
-        groupName: user.groups && user.groups.name ? user.groups.name : 'System'
-      }));
-
-      localStorage.setItem('evangelism_team', JSON.stringify(mapped));
-    }
-
-    return { ok: true, message: 'Supabase seed data synced.' };
-  } catch (error) {
-    console.warn('Supabase seed sync failed:', error);
-    return { ok: false, message: error.message || 'Unknown error.' };
-  }
-}
-
-window.ensureSupabaseSeedData = ensureSupabaseSeedData;
-
-initSeedData();
-
-if (window.testSupabaseConnection) {
-  setTimeout(() => {
-    window.testSupabaseConnection().then((result) => {
-      console.log('Supabase status:', result.message || 'Unknown');
-      if (result.ok) {
-        ensureSupabaseSeedData().then((syncResult) => {
-          console.log('Supabase seed sync:', syncResult.message || 'Unknown');
-        });
-      }
-    }).catch((error) => {
-      console.warn('Supabase status check failed:', error);
-    });
-  }, 100);
-}
-
 // --- STATE MANAGEMENT ---
 let currentUser = null;
 let activeGroupName = null;
@@ -566,6 +430,7 @@ const authScreen = document.getElementById('auth-screen');
 const dashboardScreen = document.getElementById('dashboard-screen');
 const loginForm = document.getElementById('login-form');
 const logoutBtn = document.getElementById('logout-btn');
+const staySignedInCheckbox = document.getElementById('stay-signed-in');
 const userDisplayName = document.getElementById('user-display-name');
 const roleBadge = document.getElementById('role-badge');
 const groupBadge = document.getElementById('group-badge');
@@ -574,40 +439,15 @@ const navTeamTab = document.getElementById('nav-team-tab');
 const navAdminTab = document.getElementById('nav-admin-tab');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
+const STAY_SIGNED_IN_KEY = 'evangelism_stay_signed_in';
 
 // --- AUTHENTICATION & LOGIN ---
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const testRoleSelect = document.getElementById('test-role').value;
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-
-  // If test mode is being used (test-role has a value), use that instead
-  if (testRoleSelect) {
-    let team = getStoredArray('evangelism_team');
-    if (supabase) {
-      team = await loadTeamDataFromSupabase();
-    }
-
-    currentUser = team.find(u => u.id === testRoleSelect) || null;
-
-    if (!currentUser) {
-      alert('Selected user was not found. Please try again.');
-      return;
-    }
-
-    if (currentUser.role === 'super_admin') {
-      const directorGroups = team.filter(u => u.role === 'director' && u.groupName).map(u => u.groupName);
-      activeGroupName = directorGroups[0] || currentUser.groupName || 'System';
-    } else {
-      activeGroupName = currentUser.groupName || null;
-    }
-
-    showDashboard();
-    return;
-  }
 
   // Use Supabase auth with email/password
   if (!email || !password) {
@@ -616,7 +456,7 @@ loginForm.addEventListener('submit', async (e) => {
   }
 
   if (!supabase) {
-    alert('Authentication service is not available. Please use test mode.');
+    alert('Authentication service is not available. Please try again later.');
     return;
   }
 
@@ -639,6 +479,12 @@ loginForm.addEventListener('submit', async (e) => {
     if (error || !users || users.length === 0) {
       alert('User profile not found. Please contact an administrator.');
       return;
+    }
+
+    if (staySignedInCheckbox.checked) {
+      localStorage.setItem(STAY_SIGNED_IN_KEY, 'true');
+    } else {
+      localStorage.removeItem(STAY_SIGNED_IN_KEY);
     }
 
     const userRecord = users[0];
@@ -676,10 +522,64 @@ logoutBtn.addEventListener('click', async () => {
   if (supabase) {
     await window.signOutUser();
   }
+  localStorage.removeItem(STAY_SIGNED_IN_KEY);
   currentUser = null;
   dashboardScreen.classList.remove('active');
   authScreen.classList.add('active');
 });
+
+async function restoreSavedSession() {
+  if (localStorage.getItem(STAY_SIGNED_IN_KEY) !== 'true') return;
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (!supabase || !window.getCurrentAuthUser) return;
+
+  try {
+    const authUser = await window.getCurrentAuthUser();
+    if (!authUser) {
+      localStorage.removeItem(STAY_SIGNED_IN_KEY);
+      return;
+    }
+
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, full_name, email, role, group_id, groups!group_id(name)')
+      .eq('auth_user_id', authUser.id);
+
+    if (error || !users || users.length === 0) {
+      localStorage.removeItem(STAY_SIGNED_IN_KEY);
+      return;
+    }
+
+    const userRecord = users[0];
+    currentUser = {
+      id: userRecord.id,
+      name: userRecord.full_name,
+      email: userRecord.email,
+      role: userRecord.role,
+      groupName: userRecord.groups ? userRecord.groups.name : null
+    };
+
+    if (currentUser.role === 'super_admin') {
+      const { data: directorUsers } = await supabase
+        .from('users')
+        .select('group_id, groups!group_id(name)')
+        .eq('role', 'director');
+      const directorGroups = (directorUsers || [])
+        .map(user => user.groups ? user.groups.name : null)
+        .filter(Boolean);
+      activeGroupName = directorGroups[0] || currentUser.groupName || 'System';
+    } else {
+      activeGroupName = currentUser.groupName || null;
+    }
+
+    await showDashboard();
+  } catch (error) {
+    console.warn('Unable to restore saved session:', error);
+  }
+}
+
+restoreSavedSession();
 
 async function showDashboard() {
   if (!currentUser) {
