@@ -131,19 +131,29 @@ async function sendPasswordSetupEmail(email) {
 
   const redirectUrl = 'https://brenanarntz.github.io/Tracking-App/';
 
-  const { data, error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true,
-      emailRedirectTo: redirectUrl
+  try {
+    const { data, error } = await supabase.functions.invoke('invite-user', {
+      body: {
+        email,
+        redirectTo: redirectUrl
+      }
+    });
+
+    if (error) {
+      return { ok: false, message: error.message || 'Invite email request failed.' };
     }
-  });
 
-  if (error) {
-    return { ok: false, message: error.message };
+    if (!data || !data.ok) {
+      return {
+        ok: false,
+        message: (data && data.message) || 'Invite email request failed.'
+      };
+    }
+
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, message: error.message || 'Invite email request failed.' };
   }
-
-  return { ok: true, data };
 }
 
 async function handleSupabaseAuthRedirect() {
