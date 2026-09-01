@@ -413,6 +413,7 @@ function getEffectiveGroupName() {
 async function setActiveGroupContext(groupName) {
   if (!groupName || !currentUser || currentUser.role !== 'super_admin') return;
   activeGroupName = groupName;
+  localStorage.setItem('evangelism_active_group', groupName);
   groupBadge.textContent = `${groupName} (Admin View)`;
   document.getElementById('rename-team-card').style.display = 'block';
   document.getElementById('team-name').value = groupName;
@@ -471,10 +472,22 @@ loginForm.addEventListener('submit', async (e) => {
     const authUser = authResult.data.user;
 
     // Look up the user in the users table
-    const { data: users, error } = await supabase
+    let { data: users, error } = await supabase
       .from('users')
       .select('id, full_name, email, role, group_id, groups!group_id(name)')
       .eq('auth_user_id', authUser.id);
+
+    if ((!users || users.length === 0) && authUser.email) {
+      const { data: usersByEmail } = await supabase
+        .from('users')
+        .select('id, full_name, email, role, group_id, groups!group_id(name)')
+        .eq('email', authUser.email);
+
+      if (usersByEmail && usersByEmail.length) {
+        users = usersByEmail;
+        await supabase.from('users').update({ auth_user_id: authUser.id }).eq('id', usersByEmail[0].id);
+      }
+    }
 
     if (error || !users || users.length === 0) {
       alert('User profile not found. Please contact an administrator.');
@@ -506,7 +519,8 @@ loginForm.addEventListener('submit', async (e) => {
       const directorGroups = directorUsers
         .map(u => u.groups ? u.groups.name : null)
         .filter(Boolean);
-      activeGroupName = directorGroups[0] || currentUser.groupName || 'System';
+      const savedGroup = localStorage.getItem('evangelism_active_group');
+      activeGroupName = currentUser.groupName || savedGroup || (directorGroups.length ? directorGroups[0] : 'System');
     } else {
       activeGroupName = currentUser.groupName || null;
     }
@@ -541,10 +555,22 @@ async function restoreSavedSession() {
       return;
     }
 
-    const { data: users, error } = await supabase
+    let { data: users, error } = await supabase
       .from('users')
       .select('id, full_name, email, role, group_id, groups!group_id(name)')
       .eq('auth_user_id', authUser.id);
+
+    if ((!users || users.length === 0) && authUser.email) {
+      const { data: usersByEmail } = await supabase
+        .from('users')
+        .select('id, full_name, email, role, group_id, groups!group_id(name)')
+        .eq('email', authUser.email);
+
+      if (usersByEmail && usersByEmail.length) {
+        users = usersByEmail;
+        await supabase.from('users').update({ auth_user_id: authUser.id }).eq('id', usersByEmail[0].id);
+      }
+    }
 
     if (error || !users || users.length === 0) {
       localStorage.removeItem(STAY_SIGNED_IN_KEY);
@@ -568,7 +594,8 @@ async function restoreSavedSession() {
       const directorGroups = (directorUsers || [])
         .map(user => user.groups ? user.groups.name : null)
         .filter(Boolean);
-      activeGroupName = directorGroups[0] || currentUser.groupName || 'System';
+      const savedGroup = localStorage.getItem('evangelism_active_group');
+      activeGroupName = currentUser.groupName || savedGroup || (directorGroups.length ? directorGroups[0] : 'System');
     } else {
       activeGroupName = currentUser.groupName || null;
     }
@@ -1583,6 +1610,15 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
         throw new Error(insertError.message);
       } else {
         console.log('User saved to Supabase:', newMemberId);
+        if (window.sendPasswordSetupEmail) {
+          const emailRes = await window.sendPasswordSetupEmail(newMemberEmail);
+          if (emailRes.ok) {
+            alert(`Member added! An email invitation to create a password was sent to ${newMemberEmail}.`);
+          } else {
+            console.warn('Password invite email status:', emailRes.message);
+            alert(`Member added, but password setup email could not be sent: ${emailRes.message}`);
+          }
+        }
       }
     } catch (err) {
       console.warn('Supabase error:', err.message);
@@ -1825,6 +1861,17 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
     localStorage.setItem('evangelism_resources', JSON.stringify(resources));
 
     document.getElementById('appoint-director-form').reset();
+
+    if (window.sendPasswordSetupEmail && supabase) {
+      const emailRes = await window.sendPasswordSetupEmail(directorEmail);
+      if (emailRes.ok) {
+        alert(`Group created & director appointed! An email invitation to create a password was sent to ${directorEmail}.`);
+      } else {
+        console.warn('Password invite email status:', emailRes.message);
+        alert(`Director & group created, but password setup email could not be sent: ${emailRes.message}`);
+      }
+    }
+
     await renderSuperAdminPanel();
     await renderTeam();
     await renderResources();
@@ -1834,42 +1881,206 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
   }
 });
 
+async function loadAllGroupsFromSupabase() {
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  const groupsSet = new Set();
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('name');
+      if (data && !error) {
+        data.forEach(g => { if (g.name) groupsSet.add(g.name); });
+      }
+    } catch (e) {
+      console.warn('Group fetch failed:', e);
+    }
+  }
+
+  const team = getStoredArray('evangelism_team');
+  team.forEach(m => { if (m.groupName && m.groupName !== 'System') groupsSet.add(m.groupName); });
+
+  const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
+  Object.keys(cachedGroupIds).forEach(g => { if (g && g !== 'System') groupsSet.add(g); });
+
+  const resources = getStoredArray('evangelism_resources');
+  resources.forEach(r => { if (r.groupName && r.groupName !== 'System') groupsSet.add(r.groupName); });
+
+  const logs = getStoredArray('evangelism_logs');
+  logs.forEach(l => { if (l.groupName && l.groupName !== 'System') groupsSet.add(l.groupName); });
+
+  const events = getStoredArray('evangelism_events');
+  events.forEach(e => { if (e.groupName && e.groupName !== 'System') groupsSet.add(e.groupName); });
+
+  return Array.from(groupsSet).sort();
+}
+
+window.prefillAppointDirector = function(groupName) {
+  const groupInput = document.getElementById('group-name');
+  const nameInput = document.getElementById('director-name');
+  if (groupInput) groupInput.value = groupName;
+  if (nameInput) nameInput.focus();
+};
+
+window.deleteGroupOnly = async function(groupName) {
+  if (!confirm(`Delete group "${groupName}" and all associated data?`)) return;
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+
+  try {
+    if (supabase) {
+      const { data: groupRows } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('name', groupName);
+
+      if (groupRows && groupRows.length) {
+        for (const g of groupRows) {
+          const { error: groupDeleteError } = await supabase
+            .from('groups')
+            .delete()
+            .eq('id', g.id);
+
+          if (groupDeleteError) {
+            console.warn('Supabase group delete failed:', groupDeleteError.message);
+          }
+        }
+      }
+    }
+
+    let localTeam = getStoredArray('evangelism_team');
+    localTeam = localTeam.filter(m => m.groupName !== groupName);
+    localStorage.setItem('evangelism_team', JSON.stringify(localTeam));
+
+    let localResources = getStoredArray('evangelism_resources');
+    localResources = localResources.filter(r => r.groupName !== groupName);
+    localStorage.setItem('evangelism_resources', JSON.stringify(localResources));
+
+    let localLogs = getStoredArray('evangelism_logs');
+    localLogs = localLogs.filter(l => l.groupName !== groupName);
+    localStorage.setItem('evangelism_logs', JSON.stringify(localLogs));
+
+    let localEvents = getStoredArray('evangelism_events');
+    localEvents = localEvents.filter(e => e.groupName !== groupName);
+    localStorage.setItem('evangelism_events', JSON.stringify(localEvents));
+
+    const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
+    delete cachedGroupIds[groupName];
+    localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
+
+    if (activeGroupName === groupName) {
+      activeGroupName = null;
+    }
+
+    await renderTeam();
+    if (currentUser && currentUser.role === 'super_admin') await renderSuperAdminPanel();
+  } catch (error) {
+    console.warn('Group deletion failed:', error);
+    alert('Unable to delete group right now.');
+  }
+};
+
 async function renderSuperAdminPanel() {
   if (!ensureUserSession()) return;
 
   const team = await loadTeamDataFromSupabase();
+  const allGroupNames = await loadAllGroupsFromSupabase();
   const directorList = document.getElementById('director-list');
   directorList.innerHTML = '';
 
-  const directors = team.filter(m => m.role === 'director');
-
-  if (directors.length === 0) {
-    directorList.innerHTML = '<li class="empty-state">No directors assigned yet.</li>';
+  if (allGroupNames.length === 0) {
+    directorList.innerHTML = '<li class="empty-state">No groups created yet.</li>';
     return;
   }
 
-  directors.forEach(d => {
+  allGroupNames.forEach(groupName => {
+    const director = team.find(m => m.groupName === groupName && (m.role === 'director' || m.role === 'super_admin'));
+    const membersCount = team.filter(m => m.groupName === groupName).length;
+
     const li = document.createElement('li');
     li.className = 'log-item';
     li.style.cursor = 'pointer';
-    li.title = `Open ${d.groupName} as director view`;
-    const isActive = currentUser.role === 'super_admin' && activeGroupName === d.groupName;
-    li.innerHTML = `
-      <div class="log-item-header">
-        <span class="log-item-title">${escapeHtml(d.name)} (Director)</span>
-        <span class="badge group-tag">${escapeHtml(d.groupName)}</span>
-      </div>
-      <p class="log-item-notes">${escapeHtml(d.email)}</p>
-      <div class="log-actions">
-        <button class="btn-action edit" onclick="setActiveGroupContext('${d.groupName}')">${isActive ? 'Active Group' : 'Open as Director'}</button>
-        <button class="btn-action edit" onclick="openEditUserModal('${d.id}')">Edit Director/Group</button>
-        <button class="btn-action delete" onclick="deleteUser('${d.id}')">Remove Director</button>
-      </div>
-    `;
+    li.title = `Open ${groupName} as director view`;
+    const isActive = currentUser.role === 'super_admin' && activeGroupName === groupName;
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'log-item-header';
+
+    if (director) {
+      const roleLabel = director.role === 'super_admin' ? 'System Admin & Director' : 'Director';
+      headerDiv.innerHTML = `
+        <span class="log-item-title">${escapeHtml(director.name)} (${roleLabel})</span>
+        <span class="badge group-tag">${escapeHtml(groupName)}</span>
+      `;
+    } else {
+      headerDiv.innerHTML = `
+        <span class="log-item-title" style="color: var(--text-muted); font-style: italic;">No Director Assigned</span>
+        <span class="badge group-tag">${escapeHtml(groupName)}</span>
+      `;
+    }
+    li.appendChild(headerDiv);
+
+    const notesP = document.createElement('p');
+    notesP.className = 'log-item-notes';
+    notesP.textContent = director ? `${director.email} | ${membersCount} member(s)` : `${membersCount} member(s)`;
+    li.appendChild(notesP);
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'log-actions';
+
+    const btnOpen = document.createElement('button');
+    btnOpen.className = 'btn-action edit';
+    btnOpen.textContent = isActive ? 'Active Group' : 'Open Group';
+    btnOpen.onclick = (e) => {
+      e.stopPropagation();
+      setActiveGroupContext(groupName);
+    };
+    actionsDiv.appendChild(btnOpen);
+
+    if (director) {
+      const btnEdit = document.createElement('button');
+      btnEdit.className = 'btn-action edit';
+      btnEdit.textContent = 'Edit Director';
+      btnEdit.onclick = (e) => {
+        e.stopPropagation();
+        openEditUserModal(director.id);
+      };
+      actionsDiv.appendChild(btnEdit);
+
+      const btnDelete = document.createElement('button');
+      btnDelete.className = 'btn-action delete';
+      btnDelete.textContent = 'Remove Director';
+      btnDelete.onclick = (e) => {
+        e.stopPropagation();
+        deleteUser(director.id);
+      };
+      actionsDiv.appendChild(btnDelete);
+    } else {
+      const btnAppoint = document.createElement('button');
+      btnAppoint.className = 'btn-action edit';
+      btnAppoint.textContent = 'Appoint Director';
+      btnAppoint.onclick = (e) => {
+        e.stopPropagation();
+        prefillAppointDirector(groupName);
+      };
+      actionsDiv.appendChild(btnAppoint);
+
+      const btnDeleteGrp = document.createElement('button');
+      btnDeleteGrp.className = 'btn-action delete';
+      btnDeleteGrp.textContent = 'Delete Group';
+      btnDeleteGrp.onclick = (e) => {
+        e.stopPropagation();
+        deleteGroupOnly(groupName);
+      };
+      actionsDiv.appendChild(btnDeleteGrp);
+    }
+
+    li.appendChild(actionsDiv);
 
     li.addEventListener('click', (event) => {
       if (event.target.closest('button')) return;
-      setActiveGroupContext(d.groupName);
+      setActiveGroupContext(groupName);
     });
 
     directorList.appendChild(li);
@@ -2002,8 +2213,12 @@ document.getElementById('edit-user-form').addEventListener('submit', async (e) =
   }
 });
 
-window.deleteUser = async function(userId) {
-  if (!confirm('Delete this user account?')) return;
+window.deleteUser = async function(userId, groupNameToDelete = null) {
+  const confirmMsg = groupNameToDelete
+    ? `Delete director account and group "${groupNameToDelete}"?`
+    : 'Delete this user account?';
+
+  if (!confirm(confirmMsg)) return;
 
   const team = await loadTeamDataFromSupabase();
   const targetUser = team.find(m => m.id === userId);
@@ -2024,10 +2239,55 @@ window.deleteUser = async function(userId) {
       if (deleteError) {
         console.warn('Supabase user delete failed:', deleteError.message);
       }
+
+      if (groupNameToDelete) {
+        const { data: groupRows } = await supabase
+          .from('groups')
+          .select('id')
+          .eq('name', groupNameToDelete);
+
+        if (groupRows && groupRows.length) {
+          for (const g of groupRows) {
+            const { error: groupDeleteError } = await supabase
+              .from('groups')
+              .delete()
+              .eq('id', g.id);
+
+            if (groupDeleteError) {
+              console.warn('Supabase group delete failed:', groupDeleteError.message);
+            }
+          }
+        }
+      }
     }
 
     let localTeam = getStoredArray('evangelism_team');
     localTeam = localTeam.filter(m => m.id !== userId);
+
+    if (groupNameToDelete) {
+      localTeam = localTeam.filter(m => m.groupName !== groupNameToDelete);
+
+      let localResources = getStoredArray('evangelism_resources');
+      localResources = localResources.filter(r => r.groupName !== groupNameToDelete);
+      localStorage.setItem('evangelism_resources', JSON.stringify(localResources));
+
+      let localLogs = getStoredArray('evangelism_logs');
+      localLogs = localLogs.filter(l => l.groupName !== groupNameToDelete);
+      localStorage.setItem('evangelism_logs', JSON.stringify(localLogs));
+
+      let localEvents = getStoredArray('evangelism_events');
+      localEvents = localEvents.filter(e => e.groupName !== groupNameToDelete);
+      localStorage.setItem('evangelism_events', JSON.stringify(localEvents));
+
+      const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
+      delete cachedGroupIds[groupNameToDelete];
+      localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
+
+      if (activeGroupName === groupNameToDelete) {
+        activeGroupName = null;
+      }
+    }
+
     localStorage.setItem('evangelism_team', JSON.stringify(localTeam));
 
     await renderTeam();
@@ -2037,3 +2297,71 @@ window.deleteUser = async function(userId) {
     alert('Unable to delete this user right now.');
   }
 };
+
+// --- PASSWORD SETUP MODAL HANDLER (EMAIL LINK REDIRECT) ---
+function checkPasswordSetupRedirect() {
+  const hash = window.location.hash || '';
+  if (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('access_token')) {
+    const setModal = document.getElementById('set-password-modal');
+    if (setModal) setModal.classList.add('active');
+  }
+}
+
+window.addEventListener('DOMContentLoaded', checkPasswordSetupRedirect);
+
+const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
+if (supabaseAuthCheck) {
+  supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      const setModal = document.getElementById('set-password-modal');
+      if (setModal) setModal.classList.add('active');
+    }
+  });
+}
+
+document.getElementById('set-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-new-password').value;
+
+  if (newPassword !== confirmPassword) {
+    alert('Passwords do not match. Please check and try again.');
+    return;
+  }
+
+  if (!window.updateUserPassword) {
+    alert('Authentication service is not available.');
+    return;
+  }
+
+  const result = await window.updateUserPassword(newPassword);
+  if (!result.ok) {
+    alert('Failed to set password: ' + result.message);
+    return;
+  }
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase) {
+    try {
+      const authUser = await window.getCurrentAuthUser();
+      if (authUser && authUser.email) {
+        await supabase
+          .from('users')
+          .update({ auth_user_id: authUser.id })
+          .eq('email', authUser.email);
+      }
+    } catch (err) {
+      console.warn('Could not link auth_user_id:', err);
+    }
+  }
+
+  document.getElementById('set-password-modal').classList.remove('active');
+  alert('Your password has been set successfully!');
+
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, null, window.location.pathname);
+  }
+
+  await restoreSavedSession();
+});

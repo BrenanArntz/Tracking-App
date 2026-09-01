@@ -348,7 +348,7 @@
           </div>
 
           <div class="card">
-            <h3>All Active Directors & Groups</h3>
+            <h3>All Local Groups & Directors</h3>
             <ul id="director-list" class="log-list">
               <li class="empty-state">No directors assigned yet.</li>
             </ul>
@@ -516,6 +516,26 @@
             <input type="text" id="edit-user-group" required>
           </div>
           <button type="submit" class="btn primary">Save Changes</button>
+        </form>
+    <!-- SET PASSWORD MODAL (FOR EMAIL INVITES / PASSWORD RECOVERY) -->
+    <div id="set-password-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Create Your Account Password</h3>
+        </div>
+        <p style="margin-bottom: 1rem; color: var(--text-muted);">
+          Welcome! Please set a password for your account to complete registration and sign in.
+        </p>
+        <form id="set-password-form">
+          <div class="form-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" placeholder="Enter new password" required minlength="6">
+          </div>
+          <div class="form-group">
+            <label for="confirm-new-password">Confirm Password</label>
+            <input type="password" id="confirm-new-password" placeholder="Confirm new password" required minlength="6">
+          </div>
+          <button type="submit" class="btn primary">Save Password & Continue</button>
         </form>
       </div>
     </div>

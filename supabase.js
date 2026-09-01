@@ -93,9 +93,54 @@ async function getCurrentAuthUser() {
   return user;
 }
 
+async function sendPasswordSetupEmail(email) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
+
+  const redirectUrl = window.location.origin + window.location.pathname;
+
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  });
+
+  if (error) {
+    const { data: otpData, error: otpError } = await supabase.auth.signInWithOtp({
+      email: email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: redirectUrl
+      }
+    });
+
+    if (otpError) {
+      return { ok: false, message: otpError.message };
+    }
+    return { ok: true, data: otpData };
+  }
+
+  return { ok: true, data };
+}
+
+async function updateUserPassword(newPassword) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
+
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, data };
+}
+
 window.getSupabaseClient = getSupabaseClient;
 window.testSupabaseConnection = testSupabaseConnection;
 window.signUpUser = signUpUser;
 window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
+window.sendPasswordSetupEmail = sendPasswordSetupEmail;
+window.updateUserPassword = updateUserPassword;
