@@ -1415,7 +1415,7 @@ async function renderResources() {
     li.innerHTML = `
       <div class="resource-info">
         <h4><a href="${escapeHtml(res.url)}" target="_blank" rel="noopener">📄 ${escapeHtml(res.title)}</a></h4>
-        <p class="resource-desc">${escapeHtml(res.desc || 'Google Doc / Slide link')}</p>
+        <p class="resource-desc">${escapeHtml(res.desc || 'Resource Link')}</p>
       </div>
       ${isLeader ? `
         <div class="log-actions" style="border:none; padding:0; margin:0;">
