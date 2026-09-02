@@ -70,41 +70,207 @@ ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAU
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
 ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
 
--- RLS bootstrap policies required for profile lookup after Supabase Auth login.
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+-- RLS policies for authenticated users and group-scoped application access.
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_rsvps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS users_select_own_profile ON users;
-CREATE POLICY users_select_own_profile ON users
-  FOR SELECT TO authenticated
-  USING (
-    auth_user_id = auth.uid()::TEXT
-    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
-  );
+-- These helpers avoid recursive RLS checks when policies need the current profile.
+CREATE OR REPLACE FUNCTION public.current_profile_id()
+RETURNS TEXT
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT id
+  FROM public.users
+  WHERE auth_user_id = auth.uid()::TEXT
+     OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
+  LIMIT 1
+$$;
 
-DROP POLICY IF EXISTS users_update_own_profile ON users;
-CREATE POLICY users_update_own_profile ON users
-  FOR UPDATE TO authenticated
-  USING (
-    auth_user_id = auth.uid()::TEXT
-    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
-  )
-  WITH CHECK (
-    auth_user_id = auth.uid()::TEXT
-    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
-  );
+CREATE OR REPLACE FUNCTION public.current_profile_role()
+RETURNS TEXT
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT role FROM public.users WHERE id = public.current_profile_id()
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_profile_group_id()
+RETURNS TEXT
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT group_id FROM public.users WHERE id = public.current_profile_id()
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS BOOLEAN
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT public.current_profile_role() = 'super_admin'
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_group_leader(target_group_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT public.is_super_admin()
+      OR (public.current_profile_group_id() = target_group_id
+          AND public.current_profile_role() IN ('director', 'admin'))
+$$;
 
 DROP POLICY IF EXISTS groups_select_for_member ON groups;
 CREATE POLICY groups_select_for_member ON groups
   FOR SELECT TO authenticated
+  USING (public.is_super_admin() OR id = public.current_profile_group_id());
+
+DROP POLICY IF EXISTS groups_insert_for_leader ON groups;
+CREATE POLICY groups_insert_for_leader ON groups
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_super_admin() OR public.current_profile_role() IN ('director', 'admin'));
+
+DROP POLICY IF EXISTS groups_update_for_leader ON groups;
+CREATE POLICY groups_update_for_leader ON groups
+  FOR UPDATE TO authenticated
+  USING (public.is_group_leader(id))
+  WITH CHECK (public.is_group_leader(id));
+
+DROP POLICY IF EXISTS groups_delete_for_super_admin ON groups;
+CREATE POLICY groups_delete_for_super_admin ON groups
+  FOR DELETE TO authenticated
+  USING (public.is_super_admin());
+
+DROP POLICY IF EXISTS users_select_for_group ON users;
+CREATE POLICY users_select_for_group ON users
+  FOR SELECT TO authenticated
   USING (
-    id IN (
-      SELECT group_id
-      FROM users
-      WHERE auth_user_id = auth.uid()::TEXT
-        OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
-    )
+    id = public.current_profile_id()
+    OR public.is_group_leader(group_id)
+    OR (group_id IS NOT NULL AND group_id = public.current_profile_group_id())
   );
+
+DROP POLICY IF EXISTS users_insert_for_leader ON users;
+CREATE POLICY users_insert_for_leader ON users
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS users_update_for_owner_or_leader ON users;
+CREATE POLICY users_update_for_owner_or_leader ON users
+  FOR UPDATE TO authenticated
+  USING (id = public.current_profile_id() OR public.is_group_leader(group_id))
+  WITH CHECK (id = public.current_profile_id() OR public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS users_delete_for_leader ON users;
+CREATE POLICY users_delete_for_leader ON users
+  FOR DELETE TO authenticated
+  USING (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS chat_logs_select_for_group ON chat_logs;
+CREATE POLICY chat_logs_select_for_group ON chat_logs
+  FOR SELECT TO authenticated
+  USING (public.is_super_admin() OR group_id = public.current_profile_group_id());
+
+DROP POLICY IF EXISTS chat_logs_insert_for_group ON chat_logs;
+CREATE POLICY chat_logs_insert_for_group ON chat_logs
+  FOR INSERT TO authenticated
+  WITH CHECK (group_id = public.current_profile_group_id() AND author_id = public.current_profile_id());
+
+DROP POLICY IF EXISTS chat_logs_update_for_owner_or_leader ON chat_logs;
+CREATE POLICY chat_logs_update_for_owner_or_leader ON chat_logs
+  FOR UPDATE TO authenticated
+  USING (author_id = public.current_profile_id() OR public.is_group_leader(group_id))
+  WITH CHECK (author_id = public.current_profile_id() OR public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS chat_logs_delete_for_owner_or_leader ON chat_logs;
+CREATE POLICY chat_logs_delete_for_owner_or_leader ON chat_logs
+  FOR DELETE TO authenticated
+  USING (author_id = public.current_profile_id() OR public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS events_select_for_group ON events;
+CREATE POLICY events_select_for_group ON events
+  FOR SELECT TO authenticated
+  USING (public.is_super_admin() OR group_id = public.current_profile_group_id());
+
+DROP POLICY IF EXISTS events_insert_for_leader ON events;
+CREATE POLICY events_insert_for_leader ON events
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS events_update_for_leader ON events;
+CREATE POLICY events_update_for_leader ON events
+  FOR UPDATE TO authenticated
+  USING (public.is_group_leader(group_id))
+  WITH CHECK (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS events_delete_for_leader ON events;
+CREATE POLICY events_delete_for_leader ON events
+  FOR DELETE TO authenticated
+  USING (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS event_rsvps_select_for_group ON event_rsvps;
+CREATE POLICY event_rsvps_select_for_group ON event_rsvps
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.events
+    WHERE events.id = event_rsvps.event_id
+      AND (public.is_super_admin() OR events.group_id = public.current_profile_group_id())
+  ));
+
+DROP POLICY IF EXISTS event_rsvps_insert_for_member ON event_rsvps;
+CREATE POLICY event_rsvps_insert_for_member ON event_rsvps
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    user_id = public.current_profile_id()
+    AND EXISTS (SELECT 1 FROM public.events WHERE events.id = event_rsvps.event_id AND events.group_id = public.current_profile_group_id())
+  );
+
+DROP POLICY IF EXISTS event_rsvps_update_for_member ON event_rsvps;
+CREATE POLICY event_rsvps_update_for_member ON event_rsvps
+  FOR UPDATE TO authenticated
+  USING (user_id = public.current_profile_id())
+  WITH CHECK (user_id = public.current_profile_id());
+
+DROP POLICY IF EXISTS event_rsvps_delete_for_member ON event_rsvps;
+CREATE POLICY event_rsvps_delete_for_member ON event_rsvps
+  FOR DELETE TO authenticated
+  USING (user_id = public.current_profile_id());
+
+DROP POLICY IF EXISTS resources_select_for_group ON resources;
+CREATE POLICY resources_select_for_group ON resources
+  FOR SELECT TO authenticated
+  USING (public.is_super_admin() OR group_id = public.current_profile_group_id());
+
+DROP POLICY IF EXISTS resources_insert_for_leader ON resources;
+CREATE POLICY resources_insert_for_leader ON resources
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS resources_update_for_leader ON resources;
+CREATE POLICY resources_update_for_leader ON resources
+  FOR UPDATE TO authenticated
+  USING (public.is_group_leader(group_id))
+  WITH CHECK (public.is_group_leader(group_id));
+
+DROP POLICY IF EXISTS resources_delete_for_leader ON resources;
+CREATE POLICY resources_delete_for_leader ON resources
+  FOR DELETE TO authenticated
+  USING (public.is_group_leader(group_id));
 
 -- Example seed data for a Metro group
 INSERT INTO groups (id, name)
