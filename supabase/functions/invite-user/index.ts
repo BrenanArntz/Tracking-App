@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
-      return new Response(JSON.stringify({ ok: false, message: 'Missing Supabase service credentials.' }), {
+      return new Response(JSON.stringify({ ok: false, message: 'Missing Supabase service credentials' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
