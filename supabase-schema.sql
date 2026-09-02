@@ -70,6 +70,42 @@ ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAU
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
 ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
 
+-- RLS bootstrap policies required for profile lookup after Supabase Auth login.
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS users_select_own_profile ON users;
+CREATE POLICY users_select_own_profile ON users
+  FOR SELECT TO authenticated
+  USING (
+    auth_user_id = auth.uid()::TEXT
+    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
+  );
+
+DROP POLICY IF EXISTS users_update_own_profile ON users;
+CREATE POLICY users_update_own_profile ON users
+  FOR UPDATE TO authenticated
+  USING (
+    auth_user_id = auth.uid()::TEXT
+    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
+  )
+  WITH CHECK (
+    auth_user_id = auth.uid()::TEXT
+    OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
+  );
+
+DROP POLICY IF EXISTS groups_select_for_member ON groups;
+CREATE POLICY groups_select_for_member ON groups
+  FOR SELECT TO authenticated
+  USING (
+    id IN (
+      SELECT group_id
+      FROM users
+      WHERE auth_user_id = auth.uid()::TEXT
+        OR LOWER(email) = LOWER((auth.jwt() ->> 'email'))
+    )
+  );
+
 -- Example seed data for a Metro group
 INSERT INTO groups (id, name)
 VALUES ('metro_ministry', 'Metro Ministry')
