@@ -8,6 +8,7 @@ const SUPABASE_CONFIG = {
 };
 
 let supabaseClient = null;
+const AUTH_REDIRECT_URL = 'https://brenanarntz.github.io/Tracking-App/';
 
 function getSupabaseClient() {
   if (!window.supabase) {
@@ -28,7 +29,7 @@ function getSupabaseClient() {
 }
 
 function getAuthRedirectUrl() {
-  return new URL(window.location.pathname, window.location.origin).toString();
+  return AUTH_REDIRECT_URL;
 }
 
 async function testSupabaseConnection() {
@@ -139,10 +140,8 @@ async function sendPasswordSetupEmail(email) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const redirectUrl = window.location.origin + window.location.pathname;
-
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: redirectUrl
+    redirectTo: getAuthRedirectUrl()
   });
 
   if (error) {
