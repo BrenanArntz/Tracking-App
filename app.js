@@ -1360,12 +1360,20 @@ document.getElementById('resource-form').addEventListener('submit', async (e) =>
         });
       }
 
-      const { error: insertError } = await supabase
-        .from('resources')
-        .insert(resourceRows);
+      const insertErrors = [];
+      for (const resourceRow of resourceRows) {
+        const { error: insertError } = await supabase
+          .from('resources')
+          .insert([resourceRow]);
+        if (insertError) {
+          insertErrors.push(`${resourceRow.group_id}: ${insertError.message}`);
+        }
+      }
 
-      if (insertError) {
-        console.warn('Supabase resource insert failed:', insertError.message);
+      if (insertErrors.length) {
+        console.warn('Some Supabase resource inserts failed:', insertErrors);
+        alert(`The resource could not be added to every group. Run the resource ALTER TABLE statements in supabase-schema.sql and check Supabase row-level security policies. Details: ${insertErrors[0]}`);
+        if (insertErrors.some(error => error.startsWith(`${groupId}:`))) return;
       } else {
         console.log('Resource saved to Supabase:', resourceId);
       }
