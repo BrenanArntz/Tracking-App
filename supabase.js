@@ -56,27 +56,33 @@ async function signUpUser(email, password) {
   return { ok: true, data };
 }
 
-async function inviteUser(email, fullName, role, groupId, memberId) {
+function generateTemporaryPassword() {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return `Evangelism-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function createAuthUserForInvite(email) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const { data, error } = await supabase.functions.invoke('invite-user', {
-    body: {
-      email,
-      fullName,
-      role,
-      groupId,
-      memberId,
-      redirectTo: window.location.origin + window.location.pathname
-    }
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentSession = sessionData.session;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: generateTemporaryPassword()
   });
+
+  if (currentSession && data.session && data.session.user.id !== currentSession.user.id) {
+    await supabase.auth.setSession(currentSession);
+  }
 
   if (error) {
     return { ok: false, message: error.message };
   }
 
-  if (!data || !data.user) {
-    return { ok: false, message: data && data.message ? data.message : 'The invitation function did not return a user.' };
+  if (!data.user) {
+    return { ok: false, message: 'Supabase did not return the new authentication user.' };
   }
 
   return { ok: true, data };
@@ -119,71 +125,23 @@ async function getCurrentAuthUser() {
   return user;
 }
 
-<<<<<<< HEAD
 async function sendPasswordSetupEmail(email) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const redirectUrl = 'https://brenanarntz.github.io/Tracking-App/';
+  const redirectUrl = window.location.origin + window.location.pathname;
 
-  try {
-    const { data, error } = await supabase.functions.invoke('invite-user', {
-      // functions.invoke expects a string body and it's safer to set the header
-      body: JSON.stringify({ email, redirectTo: redirectUrl }),
-      headers: { 'Content-Type': 'application/json' }
-    });
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  });
 
-    if (error) {
-      return { ok: false, message: error.message || 'Invite email request failed.' };
-    }
-
-    // Inspect returned data shape — your function should return JSON like { ok: true }
-    return (data && data.ok) ? { ok: true, data } : { ok: false, message: (data && data.message) || 'Invite email request failed.' };
-  } catch (err) {
-    return { ok: false, message: err.message || 'Invite email request failed.' };
-  }
-}
-
-async function handleSupabaseAuthRedirect() {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const query = new URLSearchParams(window.location.search || '');
-  const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-  const code = query.get('code') || hash.get('code');
-  const tokenHash = query.get('token_hash') || hash.get('token_hash');
-  const type = query.get('type') || hash.get('type');
-
-  if (!code && !tokenHash) {
-    return { ok: true, changed: false };
-  }
-
-  try {
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) throw error;
-    }
-
-    if (tokenHash && type) {
-      const { error } = await supabase.auth.verifyOtp({
-        type: type,
-        token: tokenHash
-      });
-      if (error) throw error;
-    }
-
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-
-    return { ok: true, changed: true };
-  } catch (error) {
+  if (error) {
     return { ok: false, message: error.message };
   }
+
+  return { ok: true, data };
 }
 
-=======
->>>>>>> parent of 2a0e549 (authentification)
 async function updateUserPassword(newPassword) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
@@ -202,8 +160,9 @@ async function updateUserPassword(newPassword) {
 window.getSupabaseClient = getSupabaseClient;
 window.testSupabaseConnection = testSupabaseConnection;
 window.signUpUser = signUpUser;
-window.inviteUser = inviteUser;
+window.createAuthUserForInvite = createAuthUserForInvite;
 window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
+window.sendPasswordSetupEmail = sendPasswordSetupEmail;
 window.updateUserPassword = updateUserPassword;
