@@ -1596,6 +1596,17 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
 
       if (!groupId) throw new Error('The selected team could not be found.');
 
+      if (!window.createAuthUserForInvite) {
+        throw new Error('Authentication setup is not available.');
+      }
+
+      const authResult = await window.createAuthUserForInvite(newMemberEmail);
+      if (!authResult.ok) {
+        throw new Error(`Authentication user could not be created: ${authResult.message}`);
+      }
+
+      const authUserId = authResult.data.user.id;
+
       const { error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -1604,7 +1615,7 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
           email: newMemberEmail,
           role: newMemberRole,
           group_id: groupId,
-          auth_user_id: null
+          auth_user_id: authUserId
         }]);
 
       if (insertError) {
@@ -2300,62 +2311,20 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 };
 
 // --- PASSWORD SETUP MODAL HANDLER (EMAIL LINK REDIRECT) ---
-async function checkPasswordSetupRedirect() {
-  const hash = (window.location.hash || '').replace(/^#/, '');
-  const search = window.location.search || '';
-  const hashParams = new URLSearchParams(hash);
-  const searchParams = new URLSearchParams(search.replace(/^\?/, ''));
-  const error = searchParams.get('error') || hashParams.get('error');
-  const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
-
-  if (error === 'access_denied' || errorCode === 'otp_expired') {
-    const setModal = document.getElementById('set-password-modal');
-    if (setModal) setModal.classList.remove('active');
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-    alert('This invite link has expired or was already used. Please ask for a new invitation.');
-    return;
-  }
-
-  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-  if (supabase && (search.includes('code=') || hash.includes('code='))) {
-    const redirectResult = await window.handleSupabaseAuthRedirect();
-    if (!redirectResult.ok) {
-      console.warn('Supabase redirect handling failed:', redirectResult.message);
-    }
-  }
-
-  const validAuthFlow = hash.includes('type=recovery')
-    || hash.includes('type=invite')
-    || hash.includes('type=magiclink')
-    || hash.includes('type=signup')
-    || hash.includes('access_token')
-    || hash.includes('code=')
-    || search.includes('code=');
-
-  if (validAuthFlow) {
+function checkPasswordSetupRedirect() {
+  const hash = window.location.hash || '';
+  if (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('access_token')) {
     const setModal = document.getElementById('set-password-modal');
     if (setModal) setModal.classList.add('active');
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  checkPasswordSetupRedirect();
-});
+window.addEventListener('DOMContentLoaded', checkPasswordSetupRedirect);
 
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    const hash = (window.location.hash || '').replace(/^#/, '');
-    const validAuthFlow = hash.includes('type=recovery')
-      || hash.includes('type=invite')
-      || hash.includes('type=magiclink')
-      || hash.includes('type=signup')
-      || hash.includes('access_token')
-      || hash.includes('code=');
-
-    if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && validAuthFlow)) {
+    if (event === 'PASSWORD_RECOVERY') {
       const setModal = document.getElementById('set-password-modal');
       if (setModal) setModal.classList.add('active');
     }

@@ -129,69 +129,17 @@ async function sendPasswordSetupEmail(email) {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const redirectUrl = 'https://brenanarntz.github.io/Tracking-App/';
+  const redirectUrl = window.location.origin + window.location.pathname;
 
-  try {
-    const { data, error } = await supabase.functions.invoke('invite-user', {
-      body: {
-        email,
-        redirectTo: redirectUrl
-      }
-    });
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  });
 
-    if (error) {
-      return { ok: false, message: error.message || 'Invite email request failed.' };
-    }
-
-    if (!data || !data.ok) {
-      return {
-        ok: false,
-        message: (data && data.message) || 'Invite email request failed.'
-      };
-    }
-
-    return { ok: true, data };
-  } catch (error) {
-    return { ok: false, message: error.message || 'Invite email request failed.' };
-  }
-}
-
-async function handleSupabaseAuthRedirect() {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const query = new URLSearchParams(window.location.search || '');
-  const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-  const code = query.get('code') || hash.get('code');
-  const tokenHash = query.get('token_hash') || hash.get('token_hash');
-  const type = query.get('type') || hash.get('type');
-
-  if (!code && !tokenHash) {
-    return { ok: true, changed: false };
-  }
-
-  try {
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) throw error;
-    }
-
-    if (tokenHash && type) {
-      const { error } = await supabase.auth.verifyOtp({
-        type: type,
-        token: tokenHash
-      });
-      if (error) throw error;
-    }
-
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-
-    return { ok: true, changed: true };
-  } catch (error) {
+  if (error) {
     return { ok: false, message: error.message };
   }
+
+  return { ok: true, data };
 }
 
 async function updateUserPassword(newPassword) {
@@ -217,5 +165,4 @@ window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
 window.sendPasswordSetupEmail = sendPasswordSetupEmail;
-window.handleSupabaseAuthRedirect = handleSupabaseAuthRedirect;
 window.updateUserPassword = updateUserPassword;
