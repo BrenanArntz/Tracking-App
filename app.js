@@ -1325,22 +1325,44 @@ document.getElementById('resource-form').addEventListener('submit', async (e) =>
     groupName: targetGroup,
     title: document.getElementById('resource-title').value,
     url: document.getElementById('resource-url').value,
-    desc: document.getElementById('resource-desc').value
+    desc: document.getElementById('resource-desc').value,
+    isDefault: currentUser.role === 'super_admin' && document.getElementById('resource-is-default').checked,
+    defaultKey: resourceId
   };
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
   if (supabase) {
     try {
       const groupId = getEffectiveGroupId();
+      const resourceRows = [{
+        id: resourceId,
+        group_id: groupId,
+        title: newResource.title,
+        url: newResource.url,
+        description: newResource.desc,
+        is_default: newResource.isDefault,
+        default_key: newResource.isDefault ? newResource.defaultKey : null
+      }];
+
+      if (newResource.isDefault) {
+        const { data: groups, error: groupsError } = await supabase
+          .from('groups')
+          .select('id');
+        if (groupsError) throw new Error(groupsError.message);
+        groups.forEach(group => {
+          if (String(group.id) !== String(groupId)) {
+            resourceRows.push({
+              ...resourceRows[0],
+              id: `${resourceId}_${group.id}`,
+              group_id: group.id
+            });
+          }
+        });
+      }
+
       const { error: insertError } = await supabase
         .from('resources')
-        .insert([{
-          id: resourceId,
-          group_id: groupId,
-          title: newResource.title,
-          url: newResource.url,
-          description: newResource.desc
-        }]);
+        .insert(resourceRows);
 
       if (insertError) {
         console.warn('Supabase resource insert failed:', insertError.message);
@@ -1407,6 +1429,7 @@ window.openEditResourceModal = function(id) {
   document.getElementById('edit-resource-title').value = res.title;
   document.getElementById('edit-resource-url').value = res.url;
   document.getElementById('edit-resource-desc').value = res.desc;
+  document.getElementById('edit-resource-is-default').checked = res.isDefault === true;
 
   document.getElementById('edit-resource-modal').classList.add('active');
 };
@@ -1425,24 +1448,73 @@ document.getElementById('edit-resource-form').addEventListener('submit', async (
     resources[index].title = document.getElementById('edit-resource-title').value;
     resources[index].url = document.getElementById('edit-resource-url').value;
     resources[index].desc = document.getElementById('edit-resource-desc').value;
+    const isDefault = currentUser.role === 'super_admin' && document.getElementById('edit-resource-is-default').checked;
+    const defaultKey = resources[index].defaultKey || `default-${id}`;
+    resources[index].isDefault = isDefault;
+    resources[index].defaultKey = isDefault ? defaultKey : '';
 
     const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
     if (supabase) {
       try {
+        const updateValues = {
+          title: resources[index].title,
+          url: resources[index].url,
+          description: resources[index].desc,
+          is_default: isDefault,
+          default_key: isDefault ? defaultKey : null,
+          updated_at: new Date().toISOString()
+        };
+        const { data: existingResource, error: resourceError } = await supabase
+          .from('resources')
+          .select('group_id, default_key')
+          .eq('id', id)
+          .single();
+        if (resourceError) throw new Error(resourceError.message);
+
         const { error: updateError } = await supabase
           .from('resources')
-          .update({
-            title: resources[index].title,
-            url: resources[index].url,
-            description: resources[index].desc,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateValues)
           .eq('id', id);
 
         if (updateError) {
-          console.warn('Supabase resource update failed:', updateError.message);
+          throw new Error(updateError.message);
         } else {
           console.log('Resource updated in Supabase:', id);
+        }
+
+        if (isDefault) {
+          const { error: sharedUpdateError } = await supabase
+            .from('resources')
+            .update(updateValues)
+            .eq('default_key', defaultKey)
+            .neq('id', id);
+          if (sharedUpdateError) throw new Error(sharedUpdateError.message);
+
+          const { data: groups, error: groupsError } = await supabase
+            .from('groups')
+            .select('id');
+          if (groupsError) throw new Error(groupsError.message);
+          const rows = groups
+            .filter(group => String(group.id) !== String(existingResource.group_id))
+            .map(group => ({
+              id: `${defaultKey}_${group.id}`,
+              group_id: group.id,
+              ...updateValues,
+              default_key: defaultKey
+            }));
+          if (rows.length) {
+            const { error: upsertError } = await supabase
+              .from('resources')
+              .upsert(rows, { onConflict: 'id' });
+            if (upsertError) throw new Error(upsertError.message);
+          }
+        } else if (existingResource.default_key) {
+          const { error: removeDefaultError } = await supabase
+            .from('resources')
+            .update({ is_default: false, default_key: null, updated_at: new Date().toISOString() })
+            .eq('default_key', existingResource.default_key)
+            .neq('id', id);
+          if (removeDefaultError) throw new Error(removeDefaultError.message);
         }
       } catch (err) {
         console.warn('Supabase error during resource update:', err.message);
@@ -1861,12 +1933,23 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
       cachedGroupIds[groupName] = resolvedGroupId;
       localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
-      const defaultResources = DEFAULT_RESOURCES.map((def, index) => ({
-        id: `group_resource_${Date.now()}_${index}`,
+      let defaultResources = DEFAULT_RESOURCES;
+      const { data: savedDefaults, error: defaultsError } = await supabase
+        .from('resources')
+        .select('title, url, description, default_key')
+        .eq('is_default', true);
+      if (!defaultsError && savedDefaults && savedDefaults.length) {
+        defaultResources = savedDefaults;
+      }
+
+      defaultResources = defaultResources.map((resource, index) => ({
+        id: `group_resource_${resolvedGroupId}_${resource.default_key || resource.defaultKey || index}`,
         group_id: resolvedGroupId,
-        title: def.title,
-        url: def.url,
-        description: def.desc
+        title: resource.title,
+        url: resource.url,
+        description: resource.description || resource.desc || '',
+        is_default: true,
+        default_key: resource.default_key || resource.defaultKey || `built-in-${index}`
       }));
 
       const { error: resourceInsertError } = await supabase
