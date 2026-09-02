@@ -207,6 +207,10 @@
                 <label for="resource-desc">Description (Optional)</label>
                 <input type="text" id="resource-desc" placeholder="Brief outline of this material">
               </div>
+              <label id="resource-default-row" class="checkbox-label" style="display: none;" for="resource-is-default">
+                <input type="checkbox" id="resource-is-default">
+                <span>Make this a default resource for every group</span>
+              </label>
               <button type="submit" class="btn primary">Add Resource</button>
             </form>
           </div>
@@ -481,6 +485,10 @@
             <label for="edit-resource-desc">Description</label>
             <input type="text" id="edit-resource-desc">
           </div>
+          <label id="edit-resource-default-row" class="checkbox-label" style="display: none;" for="edit-resource-is-default">
+            <input type="checkbox" id="edit-resource-is-default">
+            <span>Make this a default resource for every group</span>
+          </label>
           <button type="submit" class="btn primary">Update Resource</button>
         </form>
       </div>

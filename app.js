@@ -2,12 +2,14 @@
 const DEFAULT_RESOURCES = [
   {
     id: 1,
+    defaultKey: 'built-in-gospel-guide',
     title: 'Standard Gospel Presentation Guide (Google Docs)',
     url: 'https://docs.google.com/document/u/0/?show_intro=true',
     desc: 'Core outline for local group evangelism training.'
   },
   {
     id: 2,
+    defaultKey: 'built-in-follow-up-slides',
     title: 'Follow-up & Discipleship Slides (Google Slides)',
     url: 'https://slides.google.com/u/0/?show_intro=true',
     desc: 'Slide deck for training new members on follow-ups.'
@@ -191,7 +193,9 @@ async function loadResourcesFromSupabase() {
       groupName: resource.groups && resource.groups.name ? resource.groups.name : getEffectiveGroupName(),
       title: resource.title,
       url: resource.url,
-      desc: resource.description || ''
+      desc: resource.description || '',
+      isDefault: resource.is_default === true,
+      defaultKey: resource.default_key || ''
     }));
 
     localStorage.setItem('evangelism_resources', JSON.stringify(mapped));
@@ -640,6 +644,8 @@ async function showDashboard() {
   // Form Visibilities
   document.getElementById('add-event-card').style.display = isLeader ? 'block' : 'none';
   document.getElementById('add-resource-card').style.display = isLeader ? 'block' : 'none';
+  document.getElementById('resource-default-row').style.display = isSuper ? 'inline-flex' : 'none';
+  document.getElementById('edit-resource-default-row').style.display = isSuper ? 'inline-flex' : 'none';
   document.getElementById('add-member-card').style.display = isLeader ? 'block' : 'none';
   document.getElementById('rename-team-card').style.display = canRenameTeam ? 'block' : 'none';
   if (canRenameTeam) document.getElementById('team-name').value = getEffectiveGroupName() || '';

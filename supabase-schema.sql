@@ -59,9 +59,14 @@ CREATE TABLE IF NOT EXISTS resources (
   title TEXT NOT NULL,
   url TEXT NOT NULL,
   description TEXT DEFAULT '',
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  default_key TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
 
 -- Example seed data for a Metro group
 INSERT INTO groups (id, name)
