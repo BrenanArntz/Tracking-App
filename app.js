@@ -105,8 +105,9 @@ async function loadChatLogsFromSupabase() {
       evangelists: log.evangelists || [],
       progress: log.progress || 0,
       heardGospelCount: log.heard_gospel_count || 0,
-      professedCount: log.professed_count || 0,
+        professedCount: log.professed_count || 0,
       notes: log.notes || '',
+        location: log.location || '',
       photo: log.photo_url || ''
     }));
 
@@ -656,6 +657,7 @@ async function showDashboard() {
 
   // Default dates
   document.getElementById('chat-date').valueAsDate = new Date();
+  autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
   syncLogCounters(false);
@@ -718,6 +720,28 @@ function switchTab(tabId) {
   if (activeContent) activeContent.classList.add('active');
 }
 
+function getEventNameForDate(date) {
+  if (!date) return '';
+
+  const matchingEvent = getStoredArray('evangelism_events').find(event => (
+    String(event.datetime || '').slice(0, 10) === date
+    && event.groupName === getEffectiveGroupName()
+  ));
+  return matchingEvent ? matchingEvent.title || '' : '';
+}
+
+function autofillChatLocation(isEdit = false) {
+  const dateInput = document.getElementById(isEdit ? 'edit-chat-date' : 'chat-date');
+  const locationInput = document.getElementById(isEdit ? 'edit-chat-location' : 'chat-location');
+  if (!dateInput || !locationInput) return;
+
+  const eventName = getEventNameForDate(dateInput.value);
+  if (eventName) locationInput.value = eventName;
+}
+
+document.getElementById('chat-date').addEventListener('change', () => autofillChatLocation());
+document.getElementById('edit-chat-date').addEventListener('change', () => autofillChatLocation(true));
+
 // --- EVANGELIST CHECKBOXES ---
 function renderEvangelistCheckboxes(container = document.getElementById('evangelists-checkbox-group'), selected = []) {
   if (!ensureUserSession()) return;
@@ -774,6 +798,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
     groupName: targetGroup,
     name: document.getElementById('person-name').value,
     date: document.getElementById('chat-date').value,
+    location: document.getElementById('chat-location').value,
     evangelists: selectedEvangelists,
     progress: progress,
     heardGospelCount: progress >= 4 && progress <= 7 ? heardGospelCount : 0,
@@ -800,6 +825,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
           heard_gospel_count: newLog.heardGospelCount,
           professed_count: newLog.professedCount,
           notes: newLog.notes,
+          location: newLog.location,
           photo_url: newLog.photo
         }]);
 
@@ -820,6 +846,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
 
   document.getElementById('tracker-form').reset();
   document.getElementById('chat-date').valueAsDate = new Date();
+  autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
   document.getElementById('chat-photo-delete').value = 'false';
@@ -914,6 +941,7 @@ window.openEditModal = function(logId) {
   document.getElementById('edit-log-id').value = log.id;
   document.getElementById('edit-person-name').value = log.name;
   document.getElementById('edit-chat-date').value = log.date;
+  document.getElementById('edit-chat-location').value = log.location || '';
   document.getElementById('edit-chat-progress').value = String(log.progress || 0);
   document.getElementById('edit-heard-gospel-count').value = Number(log.heardGospelCount || 1);
   document.getElementById('edit-professed-count').value = Number(log.professedCount || 1);
@@ -957,6 +985,7 @@ document.getElementById('edit-tracker-form').addEventListener('submit', async (e
 
     logs[index].name = document.getElementById('edit-person-name').value;
     logs[index].date = document.getElementById('edit-chat-date').value;
+    logs[index].location = document.getElementById('edit-chat-location').value;
     logs[index].notes = document.getElementById('edit-chat-notes').value;
     logs[index].evangelists = Array.from(checkboxes).map(cb => cb.value);
     logs[index].progress = String(progressValue);
@@ -978,6 +1007,7 @@ document.getElementById('edit-tracker-form').addEventListener('submit', async (e
             person_name: logs[index].name,
             log_date: logs[index].date,
             notes: logs[index].notes,
+            location: logs[index].location,
             evangelists: logs[index].evangelists,
             progress: Number(logs[index].progress),
             heard_gospel_count: logs[index].heardGospelCount,
@@ -1049,7 +1079,7 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
     title: document.getElementById('event-title').value,
     datetime: rawDatetime,
     status: document.getElementById('event-status').value,
-    location: document.getElementById('event-location').value,
+    location: document.getElementById('event-title').value,
     description: document.getElementById('event-description').value,
     rsvps: {}
   };
@@ -1232,7 +1262,6 @@ window.openEditEventModal = function(eventId) {
   document.getElementById('edit-event-title').value = evt.title;
   document.getElementById('edit-event-date').value = toLocalDateTimeInput(evt.datetime);
   document.getElementById('edit-event-status').value = evt.status;
-  document.getElementById('edit-event-location').value = evt.location;
   document.getElementById('edit-event-description').value = evt.description;
 
   document.getElementById('edit-event-modal').classList.add('active');
@@ -1252,7 +1281,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async (e) 
     events[index].title = document.getElementById('edit-event-title').value;
     events[index].datetime = document.getElementById('edit-event-date').value;
     events[index].status = document.getElementById('edit-event-status').value;
-    events[index].location = document.getElementById('edit-event-location').value;
+    events[index].location = events[index].title;
     events[index].description = document.getElementById('edit-event-description').value;
 
     const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
@@ -1622,6 +1651,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   renderEvangelistCheckboxes();
   await renderLogs();
   await renderCalendar();
+  autofillChatLocation();
   await renderResources();
 });
 

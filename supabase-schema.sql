@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   heard_gospel_count INTEGER NOT NULL DEFAULT 0,
   professed_count INTEGER NOT NULL DEFAULT 0,
   notes TEXT DEFAULT '',
+  location TEXT DEFAULT '',
   photo_url TEXT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS resources (
 
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
+ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
 
 -- Example seed data for a Metro group
 INSERT INTO groups (id, name)

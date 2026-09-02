@@ -93,6 +93,11 @@
               </div>
 
               <div class="form-group">
+                <label for="chat-location">Location</label>
+                <input type="text" id="chat-location" placeholder="Event name or location">
+              </div>
+
+              <div class="form-group">
                 <label>Participating Evangelists</label>
                 <div id="evangelists-checkbox-group" class="checkbox-group"></div>
               </div>
@@ -154,7 +159,7 @@
             <h3>Schedule Evangelism Outing</h3>
             <form id="event-form">
               <div class="form-group">
-                <label for="event-title">Event Title</label>
+                <label for="event-title">Event Name/Location</label>
                 <input type="text" id="event-title" placeholder="e.g., Downtown Park Outreach" required>
               </div>
               <div class="form-group-row">
@@ -169,10 +174,6 @@
                     <option value="Tentative">Tentative</option>
                   </select>
                 </div>
-              </div>
-              <div class="form-group">
-                <label for="event-location">Location</label>
-                <input type="text" id="event-location" placeholder="e.g., Main Square Pavilion" required>
               </div>
               <div class="form-group">
                 <label for="event-description">Description & Instructions</label>
@@ -380,6 +381,10 @@
             <input type="date" id="edit-chat-date" required>
           </div>
           <div class="form-group">
+            <label for="edit-chat-location">Location</label>
+            <input type="text" id="edit-chat-location" placeholder="Event name or location">
+          </div>
+          <div class="form-group">
             <label>Participating Evangelists</label>
             <div id="edit-evangelists-checkbox-group" class="checkbox-group"></div>
           </div>
@@ -435,7 +440,7 @@
         <form id="edit-event-form">
           <input type="hidden" id="edit-event-id">
           <div class="form-group">
-            <label for="edit-event-title">Event Title</label>
+            <label for="edit-event-title">Event Name/Location</label>
             <input type="text" id="edit-event-title" required>
           </div>
           <div class="form-group-row">
@@ -450,10 +455,6 @@
                 <option value="Tentative">Tentative</option>
               </select>
             </div>
-          </div>
-          <div class="form-group">
-            <label for="edit-event-location">Location</label>
-            <input type="text" id="edit-event-location" required>
           </div>
           <div class="form-group">
             <label for="edit-event-description">Description & Instructions</label>
