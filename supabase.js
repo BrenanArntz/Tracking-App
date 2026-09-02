@@ -133,26 +133,19 @@ async function sendPasswordSetupEmail(email) {
 
   try {
     const { data, error } = await supabase.functions.invoke('invite-user', {
-      body: {
-        email,
-        redirectTo: redirectUrl
-      }
+      // functions.invoke expects a string body and it's safer to set the header
+      body: JSON.stringify({ email, redirectTo: redirectUrl }),
+      headers: { 'Content-Type': 'application/json' }
     });
 
     if (error) {
       return { ok: false, message: error.message || 'Invite email request failed.' };
     }
 
-    if (!data || !data.ok) {
-      return {
-        ok: false,
-        message: (data && data.message) || 'Invite email request failed.'
-      };
-    }
-
-    return { ok: true, data };
-  } catch (error) {
-    return { ok: false, message: error.message || 'Invite email request failed.' };
+    // Inspect returned data shape — your function should return JSON like { ok: true }
+    return (data && data.ok) ? { ok: true, data } : { ok: false, message: (data && data.message) || 'Invite email request failed.' };
+  } catch (err) {
+    return { ok: false, message: err.message || 'Invite email request failed.' };
   }
 }
 
