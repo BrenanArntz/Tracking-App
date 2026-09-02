@@ -51,10 +51,7 @@ async function signUpUser(email, password) {
 
   const { data, error } = await supabase.auth.signUp({
     email,
-    password,
-    options: {
-      emailRedirectTo: getAuthRedirectUrl()
-    }
+    password
   });
 
   if (error) {
@@ -78,10 +75,7 @@ async function createAuthUserForInvite(email) {
   const currentSession = sessionData.session;
   const { data, error } = await supabase.auth.signUp({
     email,
-    password: generateTemporaryPassword(),
-    options: {
-      emailRedirectTo: getAuthRedirectUrl()
-    }
+    password: generateTemporaryPassword()
   });
 
   if (currentSession && data.session && data.session.user.id !== currentSession.user.id) {

@@ -1622,7 +1622,15 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
         throw new Error(insertError.message);
       } else {
         console.log('User saved to Supabase:', newMemberId);
-        alert(`Member added! A confirmation email was sent to ${newMemberEmail}. They will receive a password setup email after confirming.`);
+        if (window.sendPasswordSetupEmail) {
+          const emailResult = await window.sendPasswordSetupEmail(newMemberEmail);
+          if (!emailResult.ok) {
+            console.warn('Password setup email status:', emailResult.message);
+            alert(`Member added, but password setup email could not be sent: ${emailResult.message}`);
+          } else {
+            alert(`Member added! A password setup email was sent to ${newMemberEmail}.`);
+          }
+        }
       }
     } catch (err) {
       console.warn('Supabase error:', err.message);
@@ -1866,7 +1874,15 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
 
     document.getElementById('appoint-director-form').reset();
 
-    alert(`Group created & director appointed! A confirmation email was sent to ${directorEmail}. They will receive a password setup email after confirming.`);
+    if (window.sendPasswordSetupEmail && supabase) {
+      const emailResult = await window.sendPasswordSetupEmail(directorEmail);
+      if (!emailResult.ok) {
+        console.warn('Password setup email status:', emailResult.message);
+        alert(`Director & group created, but password setup email could not be sent: ${emailResult.message}`);
+      } else {
+        alert(`Group created & director appointed! A password setup email was sent to ${directorEmail}.`);
+      }
+    }
 
     await renderSuperAdminPanel();
     await renderTeam();
@@ -2313,31 +2329,6 @@ const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() 
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
     if (event === 'PASSWORD_RECOVERY' && session) showPasswordSetupModal();
-
-    if (event === 'SIGNED_IN' && session) {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      if (hashParams.get('type') !== 'signup' || !session.user.email) return;
-
-      const deliveryKey = `password-setup-sent:${session.user.id}`;
-      if (sessionStorage.getItem(deliveryKey) === 'true') return;
-      sessionStorage.setItem(deliveryKey, 'true');
-
-      if (window.sendPasswordSetupEmail) {
-        const emailResult = await window.sendPasswordSetupEmail(session.user.email);
-        if (!emailResult.ok) {
-          sessionStorage.removeItem(deliveryKey);
-          console.warn('Password setup email could not be sent:', emailResult.message);
-          alert(`Your email was confirmed, but the password setup email could not be sent: ${emailResult.message}`);
-          return;
-        }
-      }
-
-      alert('Your email has been confirmed. A second email to create your password is on its way.');
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, null, window.location.pathname);
-      }
-      await supabaseAuthCheck.auth.signOut();
-    }
   });
 }
 
