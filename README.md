@@ -22,5 +22,15 @@ Files added for the database transition:
 4. Replace localStorage operations with Supabase queries in `app.js`.
 5. Add auth and secure row-level policies.
 
+## Invitations
+
+Member and director invitations use the `supabase/functions/invite-user` Edge Function. Deploy it with:
+
+```text
+supabase functions deploy invite-user
+```
+
+The function uses the service-role key only on the server and sends one invitation email. Set the app URL as an allowed Auth redirect URL in Supabase.
+
 ## Notes
 The current app still works with localStorage until the database layer is connected.
