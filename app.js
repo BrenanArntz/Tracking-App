@@ -1826,12 +1826,29 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
         }
       }
 
+      if (!window.createAuthUserForInvite) {
+        throw new Error('Authentication setup is not available.');
+      }
+
+      const authResult = await window.createAuthUserForInvite(directorEmail);
+      if (!authResult.ok) {
+        throw new Error(`Authentication user could not be created: ${authResult.message}`);
+      }
+
+      const authUserId = authResult.data.user.id;
       const { error: insertUserError } = await supabase
         .from('users')
-        .insert([{ id: directorId, full_name: directorName, email: directorEmail, role: 'director', group_id: resolvedGroupId }]);
+        .insert([{
+          id: directorId,
+          full_name: directorName,
+          email: directorEmail,
+          role: 'director',
+          group_id: resolvedGroupId,
+          auth_user_id: authUserId
+        }]);
 
       if (insertUserError) {
-        console.warn('Supabase director insert failed:', insertUserError.message);
+        throw new Error(`Director could not be saved: ${insertUserError.message}`);
       }
 
       const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
