@@ -27,6 +27,10 @@ function getSupabaseClient() {
   return supabaseClient;
 }
 
+function getAuthRedirectUrl() {
+  return new URL(window.location.pathname, window.location.origin).toString();
+}
+
 async function testSupabaseConnection() {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
@@ -46,7 +50,10 @@ async function signUpUser(email, password) {
 
   const { data, error } = await supabase.auth.signUp({
     email,
-    password
+    password,
+    options: {
+      emailRedirectTo: getAuthRedirectUrl()
+    }
   });
 
   if (error) {
@@ -70,7 +77,10 @@ async function createAuthUserForInvite(email) {
   const currentSession = sessionData.session;
   const { data, error } = await supabase.auth.signUp({
     email,
-    password: generateTemporaryPassword()
+    password: generateTemporaryPassword(),
+    options: {
+      emailRedirectTo: getAuthRedirectUrl()
+    }
   });
 
   if (currentSession && data.session && data.session.user.id !== currentSession.user.id) {

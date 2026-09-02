@@ -2311,23 +2311,25 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 };
 
 // --- PASSWORD SETUP MODAL HANDLER (EMAIL LINK REDIRECT) ---
+function showPasswordSetupModal() {
+  const setModal = document.getElementById('set-password-modal');
+  if (setModal) setModal.classList.add('active');
+}
+
 function checkPasswordSetupRedirect() {
-  const hash = window.location.hash || '';
-  if (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('access_token')) {
-    const setModal = document.getElementById('set-password-modal');
-    if (setModal) setModal.classList.add('active');
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const authType = hashParams.get('type');
+  if (authType === 'recovery' || authType === 'invite' || hashParams.has('access_token')) {
+    showPasswordSetupModal();
   }
 }
 
-window.addEventListener('DOMContentLoaded', checkPasswordSetupRedirect);
+checkPasswordSetupRedirect();
 
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      const setModal = document.getElementById('set-password-modal');
-      if (setModal) setModal.classList.add('active');
-    }
+    if (event === 'PASSWORD_RECOVERY' && session) showPasswordSetupModal();
   });
 }
 
