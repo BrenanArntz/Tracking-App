@@ -12,8 +12,8 @@
   <!-- iOS / Apple Add to Home Screen -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="EV Tracker">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-title" content="Evangelism Tracker">
+  <link rel="apple-touch-icon" href="icons/fireball2sq.png">
   
   <link rel="stylesheet" href="style.css">
 </head>
@@ -24,7 +24,7 @@
     <!-- LOGIN SCREEN -->
     <section id="auth-screen" class="screen active">
       <div class="card">
-        <img class="login-logo" src="icons/icon-192.png" alt="Evangelism Tracker logo">
+        <img class="login-logo" src="icons/fireball2sq.png" alt="Evangelism Tracker logo">
         <h2>Evangelism Tracker</h2>
         <p class="subtitle">Log in to track your conversations & outings</p>
         
@@ -61,7 +61,7 @@
           </div>
         </div>
         <div class="header-actions">
-          <img class="header-logo" src="icons/icon-192.png" alt="Evangelism Tracker logo">
+          <img class="header-logo" src="icons/fireball2sq.png" alt="Evangelism Tracker logo">
           <button id="logout-btn" class="btn-text">Log Out</button>
         </div>
       </header>
@@ -155,6 +155,13 @@
 
         <!-- TAB 2: CALENDAR -->
         <div id="tab-calendar" class="tab-content">
+          <div class="card">
+            <h3>Upcoming Local Outings</h3>
+            <div id="calendar-event-list" class="event-list">
+              <p class="empty-state">No upcoming events scheduled for your group.</p>
+            </div>
+          </div>
+
           <div class="card" id="add-event-card" style="display: none;">
             <h3>Schedule Evangelism Outing</h3>
             <form id="event-form">
@@ -182,17 +189,17 @@
               <button type="submit" class="btn primary">Add Event</button>
             </form>
           </div>
-
-          <div class="card">
-            <h3>Upcoming Local Outings</h3>
-            <div id="calendar-event-list" class="event-list">
-              <p class="empty-state">No upcoming events scheduled for your group.</p>
-            </div>
-          </div>
         </div>
 
         <!-- TAB 3: RESOURCES -->
         <div id="tab-resources" class="tab-content">
+          <div class="card">
+            <h3>Group Training & Resource Library</h3>
+            <ul id="resource-list" class="log-list">
+              <li class="empty-state">No resources available.</li>
+            </ul>
+          </div>
+
           <div class="card" id="add-resource-card" style="display: none;">
             <h3>Add Group Resource</h3>
             <form id="resource-form">
@@ -216,17 +223,10 @@
             </form>
           </div>
 
-          <div class="card">
-            <h3>Group Training & Resource Library</h3>
-            <ul id="resource-list" class="log-list">
-              <li class="empty-state">No resources available.</li>
-            </ul>
-          </div>
-
           <p class="homescreen-note">Tip: Download this app to your home screen for quick access anytime.</p>
         </div>
 
-        <!-- TAB 4: TEAM ROSTER -->
+        <!-- TAB 4: OUR TEAM -->
         <div id="tab-team" class="tab-content">
           <div class="card team-stats-card" aria-labelledby="team-stats-title">
             <div class="team-stats-heading">

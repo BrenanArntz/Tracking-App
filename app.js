@@ -725,7 +725,6 @@ function getEventNameForDate(date) {
 
   const matchingEvent = getStoredArray('evangelism_events').find(event => (
     String(event.datetime || '').slice(0, 10) === date
-    && event.groupName === getEffectiveGroupName()
   ));
   return matchingEvent ? matchingEvent.title || '' : '';
 }
@@ -1598,7 +1597,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   const isDirectorView = currentUser && currentUser.role === 'super_admin' && getStoredArray('evangelism_team').some(member => (
     member.role === 'director' && member.groupName === activeGroupName
   ));
-  if (!currentUser || (currentUser.role !== 'director' && !isDirectorView)) {
+  if (!currentUser || (currentUser.role !== 'director' && !isDirectorView && currentUser.role !== 'super_admin')) {
     alert('Only the team director can change the team name.');
     return;
   }
@@ -1651,7 +1650,6 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   renderEvangelistCheckboxes();
   await renderLogs();
   await renderCalendar();
-  autofillChatLocation();
   await renderResources();
 });
 
