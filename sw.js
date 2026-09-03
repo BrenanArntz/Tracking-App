@@ -1,7 +1,7 @@
 ﻿// Evangelism Tracker - Service Worker
 // Keep this simple during local development so stale app code does not
 // stick around and break the UI on repeated testing.
-const CACHE_NAME = 'ev-tracker-v4';
+const CACHE_NAME = 'evangelism-tracker-v5';
 const STATIC_ASSETS = [
   '',
   'index.html',
@@ -9,8 +9,7 @@ const STATIC_ASSETS = [
   'supabase.js',
   'style.css',
   'manifest.json',
-  'icons/icon-192.png',
-  'icons/icon-512.png'
+  'icons/fireball2sq.png',
 ];
 
 const appUrl = (path) => new URL(path, self.registration.scope).toString();
