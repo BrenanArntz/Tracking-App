@@ -9,7 +9,7 @@ const STATIC_ASSETS = [
   'supabase.js',
   'style.css',
   'manifest.json',
-  'icons/fireball2sq.png',
+  'icons/trackerlogo.png',
 ];
 
 const appUrl = (path) => new URL(path, self.registration.scope).toString();
