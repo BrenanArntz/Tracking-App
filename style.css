@@ -932,6 +932,8 @@ textarea {
 
 .modal-content {
   width: min(100%, 540px);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
   background: rgba(15, 23, 42, 0.98);
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -978,5 +980,15 @@ textarea {
 
   .app-header {
     align-items: flex-start;
+  }
+
+  .modal {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 24px);
+    padding: 16px 14px;
   }
 }
