@@ -342,6 +342,11 @@ textarea {
   .log-filter-grid {
     grid-template-columns: 1fr;
   }
+
+  .team-photo-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 .team-stats-card {
@@ -634,12 +639,94 @@ textarea {
 
 .log-photo {
   display: block;
-  width: 100%;
-  max-height: 220px;
+  width: min(100%, 320px);
+  height: 220px;
   object-fit: cover;
   border-radius: 12px;
   margin-top: 10px;
   border: 1px solid var(--border);
+}
+
+.team-photos-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.team-photos-card summary {
+  cursor: pointer;
+  padding: 16px 14px;
+  color: #ffffff;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.team-photos-card summary::marker {
+  color: var(--primary);
+}
+
+.team-photos-content {
+  padding: 0 14px 15px;
+}
+
+.team-photo-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.team-photo-form .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.team-photo-form .team-photo-note-group {
+  flex-basis: 100%;
+}
+
+.team-photo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  padding-top: 15px;
+}
+
+.team-photo-item {
+  min-width: 0;
+}
+
+.team-photo-image {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.team-photo-edit-preview {
+  display: block;
+  width: min(100%, 320px);
+  height: 180px;
+  margin: 0 0 14px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.team-photo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.team-photo-meta .log-actions {
+  margin-top: 4px;
 }
 
 .evanglist-tags,

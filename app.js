@@ -86,6 +86,42 @@ async function loadTeamDataFromSupabase() {
   }
 }
 
+async function loadTeamPhotosFromSupabase() {
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  const storedPhotos = getStoredArray('evangelism_team_photos');
+  if (!supabase) return storedPhotos;
+
+  try {
+    const groupId = await getEffectiveGroupIdAsync();
+    const { data, error } = await supabase
+      .from('team_photos')
+      .select('*')
+      .eq('group_id', groupId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.warn('Supabase team photo query failed:', error ? error.message : 'No data returned.');
+      return storedPhotos;
+    }
+
+    const mapped = data.map(photo => ({
+      id: photo.id,
+      groupName: getEffectiveGroupName(),
+      authorId: photo.author_id,
+      authorName: photo.author_name || '',
+      photo: photo.photo_url || '',
+      date: photo.photo_date || photo.created_at || '',
+      note: photo.note || '',
+      createdAt: photo.created_at || ''
+    }));
+    localStorage.setItem('evangelism_team_photos', JSON.stringify(mapped));
+    return mapped;
+  } catch (error) {
+    console.warn('Unable to load team photos from Supabase, using localStorage fallback.', error);
+    return storedPhotos;
+  }
+}
+
 async function loadChatLogsFromSupabase() {
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
   if (!supabase) return getStoredArray('evangelism_logs');
@@ -912,8 +948,10 @@ async function renderLogs() {
       <span class="tag ${name === log.authorName ? 'logged-by' : ''}">${name}</span>
     `).join('');
 
-    const photoHtml = log.photo
-      ? `<img src="${log.photo}" alt="Conversation photo" class="log-photo" />`
+    const photoUrl = typeof log.photo === 'string' ? log.photo.trim() : '';
+    const hasPhoto = photoUrl && !['null', 'undefined'].includes(photoUrl.toLowerCase());
+    const photoHtml = hasPhoto
+      ? `<img src="${escapeHtml(photoUrl)}" alt="Conversation photo" class="log-photo" />`
       : '';
 
     const heardGospelCount = Number(log.heardGospelCount || 0);
@@ -1866,11 +1904,183 @@ function canManageUser(targetUser) {
   return false;
 }
 
+function canManageAllTeamPhotos() {
+  return currentUser && ['super_admin', 'director', 'admin'].includes(currentUser.role);
+}
+
+function canManageTeamPhoto(photo) {
+  return canManageAllTeamPhotos() || (currentUser && photo.authorId === currentUser.id);
+}
+
+function getTeamPhotosForCurrentUser(photos) {
+  const targetGroup = getEffectiveGroupName();
+  const groupPhotos = photos.filter(photo => photo.groupName === targetGroup);
+  return canManageAllTeamPhotos()
+    ? groupPhotos
+    : groupPhotos.filter(photo => photo.authorId === currentUser.id);
+}
+
+async function renderTeamPhotos() {
+  const photoList = document.getElementById('team-photo-list');
+  if (!photoList || !currentUser) return;
+
+  const photos = getTeamPhotosForCurrentUser(await loadTeamPhotosFromSupabase());
+  photoList.innerHTML = '';
+
+  if (photos.length === 0) {
+    photoList.innerHTML = '<p class="empty-state">No team photos added yet.</p>';
+    return;
+  }
+
+  photos.forEach(photo => {
+    const photoUrl = typeof photo.photo === 'string' ? photo.photo.trim() : '';
+    if (!photoUrl || ['null', 'undefined'].includes(photoUrl.toLowerCase())) return;
+
+    const item = document.createElement('article');
+    item.className = 'team-photo-item';
+    item.innerHTML = `
+      <img src="${escapeHtml(photoUrl)}" alt="Team photo added by ${escapeHtml(photo.authorName)}" class="team-photo-image">
+      <div class="team-photo-meta">
+        <strong>${escapeHtml(photo.date || 'Date not set')}</strong>
+        <span>${escapeHtml(photo.note || 'No note added.')}</span>
+        <span>Added by ${escapeHtml(photo.authorName || 'Team member')}</span>
+        ${canManageTeamPhoto(photo) ? `
+          <div class="log-actions">
+            <button type="button" class="btn-action edit" onclick="editTeamPhoto('${escapeHtml(String(photo.id))}')">Edit Photo</button>
+            <button type="button" class="btn-action delete" onclick="deleteTeamPhoto('${escapeHtml(String(photo.id))}')">Delete Photo</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    photoList.appendChild(item);
+  });
+
+  if (!photoList.children.length) {
+    photoList.innerHTML = '<p class="empty-state">No team photos added yet.</p>';
+  }
+}
+
+document.getElementById('team-photo-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = document.getElementById('team-photo-file');
+  const file = input.files && input.files[0];
+  if (!file || !currentUser) return;
+  const photoDate = document.getElementById('team-photo-date').value;
+  const photoNote = document.getElementById('team-photo-note').value.trim();
+
+  const newPhoto = {
+    id: `team_photo_${Date.now()}`,
+    groupName: getEffectiveGroupName(),
+    authorId: currentUser.id,
+    authorName: currentUser.name,
+    photo: await fileToDataUrl(file),
+    date: photoDate,
+    note: photoNote,
+    createdAt: new Date().toISOString()
+  };
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('team_photos').insert([{
+        id: newPhoto.id,
+        group_id: await getEffectiveGroupIdAsync(),
+        author_id: newPhoto.authorId,
+        author_name: newPhoto.authorName,
+        photo_url: newPhoto.photo,
+        photo_date: newPhoto.date,
+        note: newPhoto.note
+      }]);
+      if (error) console.warn('Supabase team photo insert failed:', error.message);
+    } catch (error) {
+      console.warn('Unable to save team photo to Supabase:', error);
+    }
+  }
+
+  const photos = getStoredArray('evangelism_team_photos');
+  photos.unshift(newPhoto);
+  localStorage.setItem('evangelism_team_photos', JSON.stringify(photos));
+  event.target.reset();
+  document.getElementById('team-photo-date').valueAsDate = new Date();
+  await renderTeamPhotos();
+});
+
+document.getElementById('team-photo-date').valueAsDate = new Date();
+
+window.editTeamPhoto = async function(photoId) {
+  const photos = await loadTeamPhotosFromSupabase();
+  const photo = photos.find(item => String(item.id) === String(photoId));
+  if (!photo || !canManageTeamPhoto(photo)) return;
+
+  document.getElementById('edit-team-photo-id').value = photo.id;
+  document.getElementById('edit-team-photo-date').value = String(photo.date || '').slice(0, 10);
+  document.getElementById('edit-team-photo-note').value = photo.note || '';
+  document.getElementById('edit-team-photo-preview').src = photo.photo || '';
+  document.getElementById('edit-team-photo-file').value = '';
+  document.getElementById('edit-team-photo-modal').classList.add('active');
+};
+
+document.getElementById('close-team-photo-modal-btn').addEventListener('click', () => {
+  document.getElementById('edit-team-photo-modal').classList.remove('active');
+});
+
+document.getElementById('edit-team-photo-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const photoId = document.getElementById('edit-team-photo-id').value;
+  const photos = await loadTeamPhotosFromSupabase();
+  const photo = photos.find(item => String(item.id) === String(photoId));
+  if (!photo || !canManageTeamPhoto(photo)) return;
+
+  const file = document.getElementById('edit-team-photo-file').files[0];
+  const photoData = file ? await fileToDataUrl(file) : photo.photo;
+  const photoDate = document.getElementById('edit-team-photo-date').value;
+  const photoNote = document.getElementById('edit-team-photo-note').value.trim();
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+
+  if (supabase) {
+    const { error } = await supabase.from('team_photos').update({
+      photo_url: photoData,
+      photo_date: photoDate,
+      note: photoNote
+    }).eq('id', photo.id);
+    if (error) console.warn('Supabase team photo update failed:', error.message);
+  }
+
+  const storedPhotos = getStoredArray('evangelism_team_photos');
+  const index = storedPhotos.findIndex(item => String(item.id) === String(photo.id));
+  if (index !== -1) {
+    storedPhotos[index].photo = photoData;
+    storedPhotos[index].date = photoDate;
+    storedPhotos[index].note = photoNote;
+    localStorage.setItem('evangelism_team_photos', JSON.stringify(storedPhotos));
+  }
+
+  document.getElementById('edit-team-photo-modal').classList.remove('active');
+  await renderTeamPhotos();
+});
+
+window.deleteTeamPhoto = async function(photoId) {
+  const photos = await loadTeamPhotosFromSupabase();
+  const photo = photos.find(item => String(item.id) === String(photoId));
+  if (!photo || !canManageTeamPhoto(photo) || !confirm('Delete this team photo?')) return;
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase) {
+    const { error } = await supabase.from('team_photos').delete().eq('id', photo.id);
+    if (error) console.warn('Supabase team photo delete failed:', error.message);
+  }
+  const storedPhotos = getStoredArray('evangelism_team_photos')
+    .filter(item => String(item.id) !== String(photo.id));
+  localStorage.setItem('evangelism_team_photos', JSON.stringify(storedPhotos));
+  await renderTeamPhotos();
+};
+
 async function renderTeam() {
   if (!ensureUserSession()) return;
 
   const team = await loadTeamDataFromSupabase();
   await renderTeamStats();
+  await renderTeamPhotos();
   const teamList = document.getElementById('team-list');
   teamList.innerHTML = '';
 

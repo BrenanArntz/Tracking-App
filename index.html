@@ -354,6 +354,30 @@
             </form>
           </div>
 
+          <details class="card team-photos-card" id="team-photos-disclosure">
+            <summary>Team Photos</summary>
+            <div class="team-photos-content">
+              <form id="team-photo-form" class="team-photo-form">
+                <div class="form-group">
+                  <label for="team-photo-file">Add a team photo</label>
+                  <input type="file" id="team-photo-file" accept="image/*" required>
+                </div>
+                <div class="form-group">
+                  <label for="team-photo-date">Date</label>
+                  <input type="date" id="team-photo-date" required>
+                </div>
+                <div class="form-group team-photo-note-group">
+                  <label for="team-photo-note">Note</label>
+                  <textarea id="team-photo-note" rows="3" placeholder="Add a note about this photo"></textarea>
+                </div>
+                <button type="submit" class="btn primary">Add Photo</button>
+              </form>
+              <div id="team-photo-list" class="team-photo-list">
+                <p class="empty-state">No team photos added yet.</p>
+              </div>
+            </div>
+          </details>
+
           <div class="card">
             <h3>Local Group Roster</h3>
             <ul id="team-list" class="log-list">
@@ -457,6 +481,33 @@
             <textarea id="edit-chat-notes" rows="3"></textarea>
           </div>
           <button type="submit" class="btn primary">Update Log</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TEAM PHOTO EDIT MODAL -->
+    <div id="edit-team-photo-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3>Edit Team Photo</h3>
+          <button id="close-team-photo-modal-btn" class="btn-text" type="button">&times;</button>
+        </div>
+        <form id="edit-team-photo-form">
+          <input type="hidden" id="edit-team-photo-id">
+          <div class="form-group">
+            <label for="edit-team-photo-file">Replace Photo (Optional)</label>
+            <input type="file" id="edit-team-photo-file" accept="image/*">
+          </div>
+          <img id="edit-team-photo-preview" class="team-photo-edit-preview" alt="Current team photo">
+          <div class="form-group">
+            <label for="edit-team-photo-date">Date</label>
+            <input type="date" id="edit-team-photo-date" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-team-photo-note">Note</label>
+            <textarea id="edit-team-photo-note" rows="4" placeholder="Add a note about this photo"></textarea>
+          </div>
+          <button type="submit" class="btn primary">Save Changes</button>
         </form>
       </div>
     </div>

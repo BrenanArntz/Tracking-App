@@ -33,6 +33,18 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS team_photos (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  author_name TEXT NOT NULL,
+  photo_url TEXT NOT NULL,
+  photo_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  note TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -69,6 +81,8 @@ CREATE TABLE IF NOT EXISTS resources (
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
 ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
+ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS photo_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
 
 -- RLS policies for authenticated users and group-scoped application access.
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
@@ -77,6 +91,7 @@ ALTER TABLE chat_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_rsvps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_photos ENABLE ROW LEVEL SECURITY;
 
 -- These helpers avoid recursive RLS checks when policies need the current profile.
 CREATE OR REPLACE FUNCTION public.current_profile_id()
@@ -134,6 +149,33 @@ AS $$
       OR (public.current_profile_group_id() = target_group_id
           AND public.current_profile_role() IN ('director', 'admin'))
 $$;
+
+DROP POLICY IF EXISTS team_photos_select_for_group ON team_photos;
+CREATE POLICY team_photos_select_for_group ON team_photos
+  FOR SELECT TO authenticated
+  USING (
+    (public.is_group_leader(group_id) OR group_id = public.current_profile_group_id())
+    AND (public.is_group_leader(group_id) OR author_id = public.current_profile_id())
+  );
+
+DROP POLICY IF EXISTS team_photos_insert_for_owner_or_leader ON team_photos;
+CREATE POLICY team_photos_insert_for_owner_or_leader ON team_photos
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    (public.is_group_leader(group_id) OR group_id = public.current_profile_group_id())
+    AND (public.is_group_leader(group_id) OR author_id = public.current_profile_id())
+  );
+
+DROP POLICY IF EXISTS team_photos_update_for_owner_or_leader ON team_photos;
+CREATE POLICY team_photos_update_for_owner_or_leader ON team_photos
+  FOR UPDATE TO authenticated
+  USING (public.is_group_leader(group_id) OR author_id = public.current_profile_id())
+  WITH CHECK (public.is_group_leader(group_id) OR author_id = public.current_profile_id());
+
+DROP POLICY IF EXISTS team_photos_delete_for_owner_or_leader ON team_photos;
+CREATE POLICY team_photos_delete_for_owner_or_leader ON team_photos
+  FOR DELETE TO authenticated
+  USING (public.is_group_leader(group_id) OR author_id = public.current_profile_id());
 
 DROP POLICY IF EXISTS groups_select_for_member ON groups;
 CREATE POLICY groups_select_for_member ON groups
@@ -271,10 +313,5 @@ DROP POLICY IF EXISTS resources_delete_for_leader ON resources;
 CREATE POLICY resources_delete_for_leader ON resources
   FOR DELETE TO authenticated
   USING (public.is_group_leader(group_id));
-
--- Example seed data for a Metro group
-INSERT INTO groups (id, name)
-VALUES ('metro_ministry', 'Metro Ministry')
-ON CONFLICT (name) DO NOTHING;
 
 -- You can add initial users and sample logs after you create your Supabase project and auth setup.
