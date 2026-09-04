@@ -147,6 +147,37 @@
 
           <div class="card">
             <h3>Chat Log</h3>
+            <div class="log-toolbar" aria-label="Search and organize chat logs">
+              <div class="form-group log-search-group">
+                <label for="log-search">Search name, notes, evangelists, progress, or location</label>
+                <input type="search" id="log-search" placeholder="Search the chat log...">
+              </div>
+              <div class="log-filter-grid">
+                <div class="form-group">
+                  <label for="log-progress-filter">Filter by progress</label>
+                  <select id="log-progress-filter">
+                    <option value="all">All progress</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="log-evangelist-filter">Filter by evangelist</label>
+                  <select id="log-evangelist-filter">
+                    <option value="all">All evangelists</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="log-sort">Sort by</label>
+                  <select id="log-sort">
+                    <option value="date-desc">Most recent date</option>
+                    <option value="date-asc">Oldest date</option>
+                    <option value="name-asc">Person's name A-Z</option>
+                    <option value="name-desc">Person's name Z-A</option>
+                    <option value="progress-desc">Progress highest first</option>
+                    <option value="progress-asc">Progress lowest first</option>
+                  </select>
+                </div>
+              </div>
+            </div>
             <ul id="log-list" class="log-list">
               <li class="empty-state">No conversations logged yet.</li>
             </ul>

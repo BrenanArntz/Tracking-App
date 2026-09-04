@@ -37,6 +37,13 @@ function toLocalDateTimeInput(value) {
 let currentUser = null;
 let activeGroupName = null;
 let selectedStatsRange = 'all';
+const logViewState = {
+  search: '',
+  progress: 'all',
+  evangelist: 'all',
+  sort: 'date-desc'
+};
+let logRenderVersion = 0;
 
 function getStoredArray(key) {
   try {
@@ -858,7 +865,10 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
 async function renderLogs() {
   if (!ensureUserSession()) return;
 
+  const renderVersion = ++logRenderVersion;
   const logs = await loadChatLogsFromSupabase();
+  if (renderVersion !== logRenderVersion) return;
+
   const logList = document.getElementById('log-list');
   logList.innerHTML = '';
 
@@ -867,12 +877,32 @@ async function renderLogs() {
     ? l.groupName === targetGroup
     : l.groupName === currentUser.groupName);
 
-  if (relevantLogs.length === 0) {
-    logList.innerHTML = '<li class="empty-state">No conversations logged yet.</li>';
+  updateLogFilterOptions(relevantLogs);
+
+  const searchTerm = logViewState.search.trim().toLowerCase();
+  const filteredLogs = relevantLogs
+    .filter(log => {
+      const searchableText = [
+        log.name,
+        log.notes,
+        ...(log.evangelists || []),
+        getProgressLabel(log.progress),
+        log.location
+      ].join(' ').toLowerCase();
+      return !searchTerm || searchableText.includes(searchTerm);
+    })
+    .filter(log => logViewState.progress === 'all' || String(log.progress || 0) === logViewState.progress)
+    .filter(log => logViewState.evangelist === 'all' || (log.evangelists || []).includes(logViewState.evangelist))
+    .sort(compareLogs);
+
+  if (filteredLogs.length === 0) {
+    logList.innerHTML = relevantLogs.length === 0
+      ? '<li class="empty-state">No conversations logged yet.</li>'
+      : '<li class="empty-state">No conversations match the current search and filters.</li>';
     return;
   }
 
-  relevantLogs.forEach(log => {
+  filteredLogs.forEach(log => {
     const isAuthorized = ['super_admin', 'director', 'admin'].includes(currentUser.role) || log.authorId === currentUser.id;
 
     const li = document.createElement('li');
@@ -924,6 +954,60 @@ async function renderLogs() {
     logList.appendChild(li);
   });
 }
+
+function compareLogs(left, right) {
+  const nameCompare = String(left.name || '').localeCompare(String(right.name || ''), undefined, { sensitivity: 'base' });
+  const dateCompare = String(left.date || '').localeCompare(String(right.date || ''));
+  const progressCompare = Number(left.progress || 0) - Number(right.progress || 0);
+
+  switch (logViewState.sort) {
+    case 'date-asc': return dateCompare || nameCompare;
+    case 'name-asc': return nameCompare || -dateCompare;
+    case 'name-desc': return -nameCompare || -dateCompare;
+    case 'progress-asc': return progressCompare || -dateCompare;
+    case 'progress-desc': return -progressCompare || -dateCompare;
+    case 'date-desc':
+    default: return -dateCompare || nameCompare;
+  }
+}
+
+function updateLogFilterOptions(logs) {
+  const progressFilter = document.getElementById('log-progress-filter');
+  const evangelistFilter = document.getElementById('log-evangelist-filter');
+  if (!progressFilter || !evangelistFilter) return;
+
+  const progressOptions = [...new Set(logs.map(log => String(log.progress || 0)))].sort((a, b) => Number(a) - Number(b));
+  const evangelistOptions = [...new Set(logs.flatMap(log => log.evangelists || []))]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  progressFilter.innerHTML = '<option value="all">All progress</option>';
+  progressOptions.forEach(value => {
+    progressFilter.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(value)}">${escapeHtml(getProgressLabel(value))}</option>`);
+  });
+  evangelistFilter.innerHTML = '<option value="all">All evangelists</option>';
+  evangelistOptions.forEach(name => {
+    evangelistFilter.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+  });
+
+  progressFilter.value = progressOptions.includes(logViewState.progress) ? logViewState.progress : 'all';
+  evangelistFilter.value = evangelistOptions.includes(logViewState.evangelist) ? logViewState.evangelist : 'all';
+  logViewState.progress = progressFilter.value;
+  logViewState.evangelist = evangelistFilter.value;
+}
+
+['log-search', 'log-progress-filter', 'log-evangelist-filter', 'log-sort'].forEach(id => {
+  const control = document.getElementById(id);
+  if (!control) return;
+  control.addEventListener('input', () => {
+    if (id === 'log-search') logViewState.search = control.value;
+    if (id === 'log-progress-filter') logViewState.progress = control.value;
+    if (id === 'log-evangelist-filter') logViewState.evangelist = control.value;
+    if (id === 'log-sort') logViewState.sort = control.value;
+    renderLogs();
+  });
+  control.addEventListener('change', () => control.dispatchEvent(new Event('input')));
+});
 
 // Log Edit/Delete Modals
 window.openEditModal = function(logId) {

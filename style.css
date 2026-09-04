@@ -229,6 +229,7 @@ label {
 }
 
 input[type="text"],
+input[type="search"],
 input[type="email"],
 input[type="password"],
 input[type="date"],
@@ -315,6 +316,32 @@ textarea {
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+.log-toolbar {
+  margin: 0 0 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.42);
+}
+
+.log-search-group,
+.log-toolbar .form-group {
+  margin-bottom: 0;
+}
+
+.log-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 600px) {
+  .log-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .team-stats-card {
