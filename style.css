@@ -579,7 +579,14 @@ textarea {
 }
 
 .photo-upload-row input[type="file"] {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
+}
+
+.photo-upload-row .btn-text {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .photo-preview-wrap {
