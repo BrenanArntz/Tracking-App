@@ -243,6 +243,10 @@ function slugifyGroupName(value) {
 }
 
 function getEffectiveGroupId() {
+  if (currentUser && currentUser.role !== 'super_admin' && currentUser.groupId) {
+    return currentUser.groupId;
+  }
+
   const targetGroupName = getEffectiveGroupName();
   if (!targetGroupName) return 'system';
 
@@ -259,6 +263,10 @@ function getEffectiveGroupId() {
 }
 
 async function getEffectiveGroupIdAsync() {
+  if (currentUser && currentUser.role !== 'super_admin' && currentUser.groupId) {
+    return currentUser.groupId;
+  }
+
   const targetGroupName = getEffectiveGroupName();
   if (!targetGroupName) return 'system';
 
@@ -534,6 +542,7 @@ loginForm.addEventListener('submit', async (e) => {
       name: userRecord.full_name,
       email: userRecord.email,
       role: userRecord.role,
+      groupId: userRecord.group_id,
       groupName: userRecord.groups ? userRecord.groups.name : null
     };
 
@@ -611,6 +620,7 @@ async function restoreSavedSession() {
       name: userRecord.full_name,
       email: userRecord.email,
       role: userRecord.role,
+      groupId: userRecord.group_id,
       groupName: userRecord.groups ? userRecord.groups.name : null
     };
 
