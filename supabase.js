@@ -32,35 +32,6 @@ function getAuthRedirectUrl() {
   return AUTH_REDIRECT_URL;
 }
 
-async function testSupabaseConnection() {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const { data, error } = await supabase.from('users').select('id').limit(1);
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  return { ok: true, message: 'Supabase connected.', data };
-}
-
-async function signUpUser(email, password) {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password
-  });
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  return { ok: true, data };
-}
-
 function generateTemporaryPassword() {
   const bytes = new Uint8Array(18);
   crypto.getRandomValues(bytes);
@@ -160,12 +131,26 @@ async function updateUserPassword(newPassword) {
   return { ok: true, data };
 }
 
+async function deleteAuthUser(userId) {
+  const supabase = getSupabaseClient();
+  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
+
+  const { data, error } = await supabase.functions.invoke('delete-user', {
+    body: { userId }
+  });
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return data || { ok: true };
+}
+
 window.getSupabaseClient = getSupabaseClient;
-window.testSupabaseConnection = testSupabaseConnection;
-window.signUpUser = signUpUser;
 window.createAuthUserForInvite = createAuthUserForInvite;
 window.signInUser = signInUser;
 window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
 window.sendPasswordSetupEmail = sendPasswordSetupEmail;
 window.updateUserPassword = updateUserPassword;
+window.deleteAuthUser = deleteAuthUser;

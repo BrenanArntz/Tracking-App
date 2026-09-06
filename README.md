@@ -1,26 +1,18 @@
-# Evangelism Tracker
+# Outreach Tracker
 
-This app is a localStorage-based tracking app for evangelism outreach, local groups, events, and resources.
+This app tracks outreach conversations, local groups, events, and shared resources.
 
 ## Current state
-- vanilla HTML/CSS/JS app
-- role-based local group logic
-- chat logs with progress counters and optional photos
-- localStorage-based persistence
+- Vanilla HTML/CSS/JS app
+- Role-based local group logic
+- Chat logs with progress counters and optional photos
+- Supabase authentication and persistence with localStorage fallback
 
-## Database migration plan
-The app is now being prepared for a Supabase migration.
+## Supabase setup
 
-Files added for the database transition:
-- `supabase.js` – Supabase client setup
-- `supabase-schema.sql` – initial schema for users, groups, logs, events, and resources
-
-## Next steps
 1. Create a Supabase project.
 2. Add your project URL and anon key to `supabase.js`.
 3. Run the SQL in `supabase-schema.sql` in the Supabase SQL editor.
-4. Replace localStorage operations with Supabase queries in `app.js`.
-5. Add auth and secure row-level policies.
+4. Deploy `supabase/functions/delete-user/index.ts` with `supabase functions deploy delete-user`.
 
-## Notes
-The current app still works with localStorage until the database layer is connected.
+The app uses localStorage as a fallback when Supabase is unavailable.

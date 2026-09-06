@@ -1,21 +1,3 @@
-// --- DEFAULT DEFAULT RESOURCES FOR NEW GROUPS ---
-const DEFAULT_RESOURCES = [
-  {
-    id: 1,
-    defaultKey: 'built-in-gospel-guide',
-    title: 'Standard Gospel Presentation Guide (Google Docs)',
-    url: 'https://docs.google.com/document/u/0/?show_intro=true',
-    desc: 'Core outline for local group evangelism training.'
-  },
-  {
-    id: 2,
-    defaultKey: 'built-in-follow-up-slides',
-    title: 'Follow-up & Discipleship Slides (Google Slides)',
-    url: 'https://slides.google.com/u/0/?show_intro=true',
-    desc: 'Slide deck for training new members on follow-ups.'
-  }
-];
-
 // Convert a Date or ISO string to the format a datetime-local input expects
 // (YYYY-MM-DDTHH:mm in local time). Avoids the value being cleared by the
 // browser when given an ISO string with a timezone suffix.
@@ -63,7 +45,7 @@ async function loadTeamDataFromSupabase() {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, role, group_id, groups!group_id(name)');
+      .select('id, auth_user_id, full_name, email, role, group_id, groups!group_id(name)');
 
     if (error || !data) {
       console.warn('Supabase user query failed:', error ? error.message : 'No data returned.');
@@ -72,6 +54,7 @@ async function loadTeamDataFromSupabase() {
 
     const mapped = data.map(user => ({
       id: user.id,
+      authUserId: user.auth_user_id,
       name: user.full_name,
       email: user.email,
       role: user.role,
@@ -251,18 +234,18 @@ async function loadResourcesFromSupabase() {
 }
 
 function slugifyGroupName(value) {
-  if (!value) return 'metro_ministry';
+  if (!value) return 'group';
   return String(value)
     .trim()
     .toLowerCase()
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'metro_ministry';
+    .replace(/^_+|_+$/g, '') || 'group';
 }
 
 function getEffectiveGroupId() {
   const targetGroupName = getEffectiveGroupName();
-  if (!targetGroupName) return 'metro_ministry';
+  if (!targetGroupName) return 'system';
 
   const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
   if (cachedGroupIds[targetGroupName]) {
@@ -270,7 +253,6 @@ function getEffectiveGroupId() {
   }
 
   const builtInGroupIdMap = {
-    'Metro Ministry': 'metro_ministry',
     'System': 'system'
   };
 
@@ -279,7 +261,7 @@ function getEffectiveGroupId() {
 
 async function getEffectiveGroupIdAsync() {
   const targetGroupName = getEffectiveGroupName();
-  if (!targetGroupName) return 'metro_ministry';
+  if (!targetGroupName) return 'system';
 
   // Check local cache first
   const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
@@ -288,7 +270,6 @@ async function getEffectiveGroupIdAsync() {
   }
 
   const builtInGroupIdMap = {
-    'Metro Ministry': 'metro_ministry',
     'System': 'system'
   };
 
@@ -1258,14 +1239,22 @@ async function renderCalendar() {
   list.innerHTML = '';
 
   const now = new Date();
+  const todayKey = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-');
 
   const targetGroup = getEffectiveGroupName();
 
   // Filter by group
   const upcomingEvents = events.filter(evt => {
-    return currentUser.role === 'super_admin'
+    const eventDateKey = String(evt.datetime || '').slice(0, 10);
+    const belongsToGroup = currentUser.role === 'super_admin'
       ? evt.groupName === targetGroup
       : evt.groupName === currentUser.groupName;
+
+    return belongsToGroup && eventDateKey >= todayKey;
   });
 
   // Sort by date ascending
@@ -2263,50 +2252,12 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
       cachedGroupIds[groupName] = resolvedGroupId;
       localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
-      let defaultResources = DEFAULT_RESOURCES;
-      const { data: savedDefaults, error: defaultsError } = await supabase
-        .from('resources')
-        .select('title, url, description, default_key')
-        .eq('is_default', true);
-      if (!defaultsError && savedDefaults && savedDefaults.length) {
-        defaultResources = savedDefaults;
-      }
-
-      defaultResources = defaultResources.map((resource, index) => ({
-        id: `group_resource_${resolvedGroupId}_${resource.default_key || resource.defaultKey || index}`,
-        group_id: resolvedGroupId,
-        title: resource.title,
-        url: resource.url,
-        description: resource.description || resource.desc || '',
-        is_default: true,
-        default_key: resource.default_key || resource.defaultKey || `built-in-${index}`
-      }));
-
-      const { error: resourceInsertError } = await supabase
-        .from('resources')
-        .upsert(defaultResources, { onConflict: 'id' });
-
-      if (resourceInsertError) {
-        console.warn('Supabase default resource insert failed:', resourceInsertError.message);
-      }
     }
 
     const team = getStoredArray('evangelism_team');
     team.push(newDirector);
     localStorage.setItem('evangelism_team', JSON.stringify(team));
     activeGroupName = groupName;
-
-    const resources = getStoredArray('evangelism_resources');
-    DEFAULT_RESOURCES.forEach(def => {
-      resources.push({
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        groupName: groupName,
-        title: def.title,
-        url: def.url,
-        desc: def.desc
-      });
-    });
-    localStorage.setItem('evangelism_resources', JSON.stringify(resources));
 
     document.getElementById('appoint-director-form').reset();
 
@@ -2679,13 +2630,13 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 
   try {
     if (supabase) {
-      const { error: deleteError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
+      if (!window.deleteAuthUser) {
+        throw new Error('Authentication deletion is not configured. Deploy the delete-user Edge Function first.');
+      }
 
-      if (deleteError) {
-        console.warn('Supabase user delete failed:', deleteError.message);
+      const authDeleteResult = await window.deleteAuthUser(userId);
+      if (!authDeleteResult.ok) {
+        throw new Error(authDeleteResult.message);
       }
 
       if (groupNameToDelete) {
