@@ -2687,7 +2687,18 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
       const { data: deleteResult, error: deleteAuthError } = await supabase.functions.invoke('delete-user', {
         body: { userId }
       });
-      if (deleteAuthError) throw new Error(deleteAuthError.message);
+      if (deleteAuthError) {
+        let functionMessage = deleteAuthError.message;
+        if (deleteAuthError.context && typeof deleteAuthError.context.json === 'function') {
+          try {
+            const responseBody = await deleteAuthError.context.json();
+            if (responseBody && responseBody.error) functionMessage = responseBody.error;
+          } catch (error) {
+            console.warn('Could not read delete-user response:', error);
+          }
+        }
+        throw new Error(`${functionMessage} Deploy the delete-user Edge Function if it has not been deployed yet.`);
+      }
       if (!deleteResult || deleteResult.ok !== true) {
         throw new Error(deleteResult && deleteResult.error ? deleteResult.error : 'The authentication account could not be deleted.');
       }

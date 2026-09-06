@@ -35,13 +35,24 @@ Deno.serve(async request => {
     if (authError || !authData.user) return jsonResponse({ error: 'The session is invalid.' }, 401);
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: callerProfile, error: callerProfileError } = await adminClient
+    const { data: callerProfilesByAuthId, error: callerAuthLookupError } = await adminClient
       .from('users')
       .select('id, role, group_id')
-      .or(`auth_user_id.eq.${authData.user.id},email.eq.${authData.user.email}`)
-      .limit(1)
-      .maybeSingle();
-    if (callerProfileError || !callerProfile) {
+      .eq('auth_user_id', authData.user.id)
+      .limit(1);
+    if (callerAuthLookupError) return jsonResponse({ error: callerAuthLookupError.message }, 500);
+
+    let callerProfile = callerProfilesByAuthId?.[0] || null;
+    if (!callerProfile && authData.user.email) {
+      const { data: callerProfilesByEmail, error: callerEmailLookupError } = await adminClient
+        .from('users')
+        .select('id, role, group_id')
+        .ilike('email', authData.user.email)
+        .limit(1);
+      if (callerEmailLookupError) return jsonResponse({ error: callerEmailLookupError.message }, 500);
+      callerProfile = callerProfilesByEmail?.[0] || null;
+    }
+    if (!callerProfile) {
       return jsonResponse({ error: 'The current user profile could not be found.' }, 403);
     }
 
@@ -66,16 +77,28 @@ Deno.serve(async request => {
     if (!canDelete) return jsonResponse({ error: 'You do not have permission to delete this user.' }, 403);
 
     let authUserId = targetProfile.auth_user_id;
-    if (!authUserId && targetProfile.email) {
+    const findAuthUserByEmail = async () => {
+      if (!targetProfile.email) return null;
       const { data: usersPage, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listError) return jsonResponse({ error: listError.message }, 500);
-      const matchingUser = usersPage.users.find(user => user.email?.toLowerCase() === targetProfile.email.toLowerCase());
-      authUserId = matchingUser?.id || null;
-    }
+      if (listError) throw new Error(listError.message);
+      return usersPage.users.find(user => user.email?.toLowerCase() === targetProfile.email.toLowerCase())?.id || null;
+    };
+
+    if (!authUserId) authUserId = await findAuthUserByEmail();
 
     if (authUserId) {
       const { error: authDeleteError } = await adminClient.auth.admin.deleteUser(authUserId);
-      if (authDeleteError) return jsonResponse({ error: authDeleteError.message }, 500);
+      if (authDeleteError && /not found|user not found/i.test(authDeleteError.message)) {
+        const emailAuthUserId = await findAuthUserByEmail();
+        if (emailAuthUserId && emailAuthUserId !== authUserId) {
+          const { error: retryDeleteError } = await adminClient.auth.admin.deleteUser(emailAuthUserId);
+          if (retryDeleteError) return jsonResponse({ error: retryDeleteError.message }, 500);
+        } else {
+          return jsonResponse({ error: authDeleteError.message }, 500);
+        }
+      } else if (authDeleteError) {
+        return jsonResponse({ error: authDeleteError.message }, 500);
+      }
     }
 
     const { error: profileDeleteError } = await adminClient
