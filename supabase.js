@@ -131,21 +131,6 @@ async function updateUserPassword(newPassword) {
   return { ok: true, data };
 }
 
-async function deleteAuthUser(userId) {
-  const supabase = getSupabaseClient();
-  if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
-
-  const { data, error } = await supabase.functions.invoke('delete-user', {
-    body: { userId }
-  });
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  return data || { ok: true };
-}
-
 window.getSupabaseClient = getSupabaseClient;
 window.createAuthUserForInvite = createAuthUserForInvite;
 window.signInUser = signInUser;
@@ -153,4 +138,3 @@ window.signOutUser = signOutUser;
 window.getCurrentAuthUser = getCurrentAuthUser;
 window.sendPasswordSetupEmail = sendPasswordSetupEmail;
 window.updateUserPassword = updateUserPassword;
-window.deleteAuthUser = deleteAuthUser;

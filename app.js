@@ -45,7 +45,7 @@ async function loadTeamDataFromSupabase() {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, auth_user_id, full_name, email, role, group_id, groups!group_id(name)');
+      .select('id, full_name, email, role, group_id, groups!group_id(name)');
 
     if (error || !data) {
       console.warn('Supabase user query failed:', error ? error.message : 'No data returned.');
@@ -54,7 +54,6 @@ async function loadTeamDataFromSupabase() {
 
     const mapped = data.map(user => ({
       id: user.id,
-      authUserId: user.auth_user_id,
       name: user.full_name,
       email: user.email,
       role: user.role,
@@ -2630,13 +2629,13 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 
   try {
     if (supabase) {
-      if (!window.deleteAuthUser) {
-        throw new Error('Authentication deletion is not configured. Deploy the delete-user Edge Function first.');
-      }
+      const { error: deleteError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
 
-      const authDeleteResult = await window.deleteAuthUser(userId);
-      if (!authDeleteResult.ok) {
-        throw new Error(authDeleteResult.message);
+      if (deleteError) {
+        console.warn('Supabase user delete failed:', deleteError.message);
       }
 
       if (groupNameToDelete) {
