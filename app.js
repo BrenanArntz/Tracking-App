@@ -1452,6 +1452,55 @@ window.deleteEvent = async function(eventId) {
 };
 
 // --- RESOURCES MANAGEMENT ---
+async function seedDefaultResourcesForGroup(groupName, groupId, supabase) {
+  const localResources = getStoredArray('evangelism_resources');
+  const defaultResources = localResources.filter(resource => resource.isDefault === true && resource.defaultKey);
+
+  defaultResources.forEach(resource => {
+    const alreadyExists = localResources.some(existing => (
+      existing.groupName === groupName && existing.defaultKey === resource.defaultKey
+    ));
+    if (!alreadyExists) {
+      localResources.push({
+        ...resource,
+        id: `${resource.defaultKey}_${groupId}`,
+        groupName
+      });
+    }
+  });
+  localStorage.setItem('evangelism_resources', JSON.stringify(localResources));
+
+  if (!supabase || !groupId) return;
+
+  const { data: existingDefaults, error: defaultsError } = await supabase
+    .from('resources')
+    .select('title, url, description, is_default, default_key')
+    .eq('is_default', true)
+    .not('default_key', 'is', null);
+  if (defaultsError) throw new Error(defaultsError.message);
+
+  const uniqueDefaults = new Map();
+  (existingDefaults || []).forEach(resource => {
+    if (!uniqueDefaults.has(resource.default_key)) uniqueDefaults.set(resource.default_key, resource);
+  });
+
+  const rows = Array.from(uniqueDefaults.values()).map(resource => ({
+    id: `${resource.default_key}_${groupId}`,
+    group_id: groupId,
+    title: resource.title,
+    url: resource.url,
+    description: resource.description || '',
+    is_default: true,
+    default_key: resource.default_key
+  }));
+  if (!rows.length) return;
+
+  const { error: upsertError } = await supabase
+    .from('resources')
+    .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+  if (upsertError) throw new Error(upsertError.message);
+}
+
 document.getElementById('resource-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -2220,6 +2269,8 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
         } else if (insertedGroup && insertedGroup.length) {
           resolvedGroupId = insertedGroup[0].id;
         }
+
+        await seedDefaultResourcesForGroup(groupName, resolvedGroupId, supabase);
       }
 
       if (!window.createAuthUserForInvite) {
@@ -2251,6 +2302,10 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
       cachedGroupIds[groupName] = resolvedGroupId;
       localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
+    }
+
+    if (!supabase) {
+      await seedDefaultResourcesForGroup(groupName, groupId, null);
     }
 
     const team = getStoredArray('evangelism_team');
@@ -2629,13 +2684,12 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
 
   try {
     if (supabase) {
-      const { error: deleteError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-
-      if (deleteError) {
-        console.warn('Supabase user delete failed:', deleteError.message);
+      const { data: deleteResult, error: deleteAuthError } = await supabase.functions.invoke('delete-user', {
+        body: { userId }
+      });
+      if (deleteAuthError) throw new Error(deleteAuthError.message);
+      if (!deleteResult || deleteResult.ok !== true) {
+        throw new Error(deleteResult && deleteResult.error ? deleteResult.error : 'The authentication account could not be deleted.');
       }
 
       if (groupNameToDelete) {
@@ -2704,7 +2758,9 @@ function showPasswordSetupModal() {
 
 function checkPasswordSetupRedirect() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  if (hashParams.get('type') === 'recovery') {
+  const queryType = new URLSearchParams(window.location.search).get('type');
+  const linkType = (hashParams.get('type') || queryType || '').toLowerCase();
+  if (['recovery', 'signup', 'invite'].includes(linkType)) {
     showPasswordSetupModal();
   }
 }
@@ -2714,7 +2770,11 @@ checkPasswordSetupRedirect();
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY' && session) showPasswordSetupModal();
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const linkType = (hashParams.get('type') || '').toLowerCase();
+    if (session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && ['signup', 'invite'].includes(linkType)))) {
+      showPasswordSetupModal();
+    }
   });
 }
 

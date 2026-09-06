@@ -14,4 +14,10 @@ This app tracks outreach conversations, local groups, events, and shared resourc
 2. Add your project URL and anon key to `supabase.js`.
 3. Run the SQL in `supabase-schema.sql` in the Supabase SQL editor.
 
+To enable removal of a user's Supabase Auth account along with their profile, deploy the Edge Function:
+
+```bash
+supabase functions deploy delete-user
+```
+
 The app uses localStorage as a fallback when Supabase is unavailable.
