@@ -96,8 +96,15 @@ async function loadTeamPhotosFromSupabase() {
       note: photo.note || '',
       createdAt: photo.created_at || ''
     }));
-    localStorage.setItem('evangelism_team_photos', JSON.stringify(mapped));
-    return mapped;
+
+    const currentGroup = getEffectiveGroupName();
+    const remoteIds = new Set(mapped.map(photo => String(photo.id)));
+    const cachedOnly = storedPhotos.filter(photo => (
+      photo.groupName === currentGroup && !remoteIds.has(String(photo.id))
+    ));
+    const merged = [...mapped, ...cachedOnly];
+    localStorage.setItem('evangelism_team_photos', JSON.stringify(merged));
+    return merged;
   } catch (error) {
     console.warn('Unable to load team photos from Supabase, using localStorage fallback.', error);
     return storedPhotos;
