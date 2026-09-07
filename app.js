@@ -112,7 +112,7 @@ async function loadChatLogsFromSupabase() {
     const groupId = await getEffectiveGroupIdAsync();
     const { data, error } = await supabase
       .from('chat_logs')
-      .select('*, groups!group_id(name)')
+      .select('*')
       .eq('group_id', groupId);
 
     if (error || !data) {
@@ -124,7 +124,7 @@ async function loadChatLogsFromSupabase() {
       id: log.id,
       authorId: log.author_id,
       authorName: log.author_name || '',
-      groupName: log.groups && log.groups.name ? log.groups.name : getEffectiveGroupName(),
+      groupName: getEffectiveGroupName(),
       name: log.person_name,
       date: log.log_date,
       evangelists: log.evangelists || [],
