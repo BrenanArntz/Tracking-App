@@ -2011,9 +2011,25 @@ document.getElementById('team-photo-form').addEventListener('submit', async (eve
   event.preventDefault();
   const input = document.getElementById('team-photo-file');
   const file = input.files && input.files[0];
-  if (!file || !currentUser) return;
   const photoDate = document.getElementById('team-photo-date').value;
   const photoNote = document.getElementById('team-photo-note').value.trim();
+
+  if (!currentUser) {
+    alert('Please sign in before adding a team photo.');
+    return;
+  }
+
+  if (!file) {
+    alert('Please choose a photo first.');
+    input.focus();
+    return;
+  }
+
+  if (!photoDate) {
+    alert('Please choose a date for the photo.');
+    document.getElementById('team-photo-date').focus();
+    return;
+  }
 
   const newPhoto = {
     id: `team_photo_${Date.now()}`,
