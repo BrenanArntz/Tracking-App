@@ -154,8 +154,7 @@ DROP POLICY IF EXISTS team_photos_select_for_group ON team_photos;
 CREATE POLICY team_photos_select_for_group ON team_photos
   FOR SELECT TO authenticated
   USING (
-    (public.is_group_leader(group_id) OR group_id = public.current_profile_group_id())
-    AND (public.is_group_leader(group_id) OR author_id = public.current_profile_id())
+    public.is_super_admin() OR group_id = public.current_profile_group_id()
   );
 
 DROP POLICY IF EXISTS team_photos_insert_for_owner_or_leader ON team_photos;

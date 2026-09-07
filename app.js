@@ -1961,10 +1961,7 @@ function canManageTeamPhoto(photo) {
 
 function getTeamPhotosForCurrentUser(photos) {
   const targetGroup = getEffectiveGroupName();
-  const groupPhotos = photos.filter(photo => photo.groupName === targetGroup);
-  return canManageAllTeamPhotos()
-    ? groupPhotos
-    : groupPhotos.filter(photo => photo.authorId === currentUser.id);
+  return photos.filter(photo => photo.groupName === targetGroup);
 }
 
 async function renderTeamPhotos() {
