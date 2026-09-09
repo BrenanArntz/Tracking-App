@@ -411,7 +411,7 @@ function getProgressLabel(level) {
     4: '4 - Gospel',
     5: '5 - Checking Questions',
     6: '6 - Complete (Not Professing)',
-    7: '7 - Complete (Not Professing)',
+    7: '7 - Complete (Professed Faith)',
     8: '8 - Already a Believer'
   };
 
@@ -2212,7 +2212,7 @@ async function renderTeamStats() {
     [4, 'Gospel'],
     [5, 'Checking Questions'],
     [6, 'Complete (Not Professing)'],
-    [7, 'Complete (Professing)'],
+    [7, 'Complete (Professed Faith)'],
     [8, 'Already a Believer']
   ];
   const counts = progressLevels.map(([level]) => relevantLogs.filter(log => Number(log.progress || 0) === level).length);
