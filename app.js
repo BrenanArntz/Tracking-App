@@ -137,10 +137,11 @@ async function loadChatLogsFromSupabase() {
       evangelists: log.evangelists || [],
       progress: log.progress || 0,
       heardGospelCount: log.heard_gospel_count || 0,
-        professedCount: log.professed_count || 0,
+      professedCount: log.professed_count || 0,
       notes: log.notes || '',
-        location: log.location || '',
-      photo: log.photo_url || ''
+      location: log.location || '',
+      photo: log.photo_url || '',
+      createdAt: log.created_at || (log.id && !isNaN(Number(log.id)) && Number(log.id) > 1000000000000 ? new Date(Number(log.id)).toISOString() : '')
     }));
 
     localStorage.setItem('evangelism_logs', JSON.stringify(mapped));
@@ -401,6 +402,92 @@ function fileToDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
+
+async function compressImage(file, maxWidth = 1600, maxHeight = 1600, quality = 0.75) {
+  if (!file || !file.type || !file.type.startsWith('image/')) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onerror = () => resolve(file);
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+          resolve(compressedFile);
+        }, 'image/jpeg', quality);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPhotoToStorage(file, bucket = 'team_photos') {
+  if (!file) return '';
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+
+  const compressedFile = await compressImage(file);
+
+  if (!supabase) {
+    return await fileToDataUrl(compressedFile);
+  }
+
+  try {
+    const groupId = await getEffectiveGroupIdAsync();
+    const cleanGroup = groupId ? String(groupId).replace(/[^a-zA-Z0-9_-]/g, '') : 'default';
+    const ext = compressedFile.name.split('.').pop() || 'jpg';
+    const fileName = `${cleanGroup}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, compressedFile, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (error) {
+      console.warn(`Supabase storage upload to ${bucket} failed:`, error.message);
+      return await fileToDataUrl(compressedFile);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(fileName);
+
+    return publicUrlData && publicUrlData.publicUrl ? publicUrlData.publicUrl : await fileToDataUrl(compressedFile);
+  } catch (err) {
+    console.warn(`Error uploading photo to ${bucket}:`, err);
+    return await fileToDataUrl(compressedFile);
+  }
+}
+
 
 function getProgressLabel(level) {
   const labels = {
@@ -818,7 +905,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   let photoData = '';
 
   if (photoInput && photoInput.files && photoInput.files[0]) {
-    photoData = await fileToDataUrl(photoInput.files[0]);
+    photoData = await uploadPhotoToStorage(photoInput.files[0], 'chat_photos');
   }
 
   if (document.getElementById('chat-photo-delete').value === 'true') {
@@ -832,6 +919,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
 
   const newLog = {
     id: String(Date.now()),
+    createdAt: new Date().toISOString(),
     authorId: currentUser.id,
     authorName: currentUser.name,
     groupName: targetGroup,
@@ -865,7 +953,8 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
           professed_count: newLog.professedCount,
           notes: newLog.notes,
           location: newLog.location,
-          photo_url: newLog.photo
+          photo_url: newLog.photo,
+          created_at: newLog.createdAt
         }]);
 
       if (insertError) {
@@ -990,19 +1079,40 @@ async function renderLogs() {
   });
 }
 
+function getLogCreatedAtTime(log) {
+  if (!log) return 0;
+  if (log.createdAt) {
+    const time = new Date(log.createdAt).getTime();
+    if (!isNaN(time)) return time;
+  }
+  if (log.created_at) {
+    const time = new Date(log.created_at).getTime();
+    if (!isNaN(time)) return time;
+  }
+  if (log.id && !isNaN(Number(log.id)) && Number(log.id) > 1000000000000) {
+    return Number(log.id);
+  }
+  if (log.date) {
+    const time = new Date(log.date).getTime();
+    if (!isNaN(time)) return time;
+  }
+  return 0;
+}
+
 function compareLogs(left, right) {
   const nameCompare = String(left.name || '').localeCompare(String(right.name || ''), undefined, { sensitivity: 'base' });
   const dateCompare = String(left.date || '').localeCompare(String(right.date || ''));
   const progressCompare = Number(left.progress || 0) - Number(right.progress || 0);
+  const createdCompare = getLogCreatedAtTime(left) - getLogCreatedAtTime(right);
 
   switch (logViewState.sort) {
-    case 'date-asc': return dateCompare || nameCompare;
-    case 'name-asc': return nameCompare || -dateCompare;
-    case 'name-desc': return -nameCompare || -dateCompare;
-    case 'progress-asc': return progressCompare || -dateCompare;
-    case 'progress-desc': return -progressCompare || -dateCompare;
+    case 'date-asc': return dateCompare || createdCompare || nameCompare;
+    case 'name-asc': return nameCompare || -dateCompare || -createdCompare;
+    case 'name-desc': return -nameCompare || -dateCompare || -createdCompare;
+    case 'progress-asc': return progressCompare || -dateCompare || -createdCompare;
+    case 'progress-desc': return -progressCompare || -dateCompare || -createdCompare;
     case 'date-desc':
-    default: return -dateCompare || nameCompare;
+    default: return -dateCompare || -createdCompare || nameCompare;
   }
 }
 
@@ -1113,7 +1223,7 @@ document.getElementById('edit-tracker-form').addEventListener('submit', async (e
     if (document.getElementById('edit-chat-photo-delete').value === 'true') {
       logs[index].photo = '';
     } else if (photoInput && photoInput.files && photoInput.files[0]) {
-      logs[index].photo = await fileToDataUrl(photoInput.files[0]);
+      logs[index].photo = await uploadPhotoToStorage(photoInput.files[0], 'chat_photos');
     }
 
     const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
@@ -2040,7 +2150,7 @@ document.getElementById('team-photo-form').addEventListener('submit', async (eve
     groupName: getEffectiveGroupName(),
     authorId: currentUser.id,
     authorName: currentUser.name,
-    photo: await fileToDataUrl(file),
+    photo: await uploadPhotoToStorage(file, 'team_photos'),
     date: photoDate,
     note: photoNote,
     createdAt: new Date().toISOString()
@@ -2099,7 +2209,7 @@ document.getElementById('edit-team-photo-form').addEventListener('submit', async
   if (!photo || !canManageTeamPhoto(photo)) return;
 
   const file = document.getElementById('edit-team-photo-file').files[0];
-  const photoData = file ? await fileToDataUrl(file) : photo.photo;
+  const photoData = file ? await uploadPhotoToStorage(file, 'team_photos') : photo.photo;
   const photoDate = document.getElementById('edit-team-photo-date').value;
   const photoNote = document.getElementById('edit-team-photo-note').value.trim();
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;

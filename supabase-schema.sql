@@ -313,4 +313,26 @@ CREATE POLICY resources_delete_for_leader ON resources
   FOR DELETE TO authenticated
   USING (public.is_group_leader(group_id));
 
+-- Storage RLS policies for public buckets (team_photos and chat_photos)
+DROP POLICY IF EXISTS "Public storage read for team_photos" ON storage.objects;
+CREATE POLICY "Public storage read for team_photos" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'team_photos');
+
+DROP POLICY IF EXISTS "Authenticated upload for team_photos" ON storage.objects;
+CREATE POLICY "Authenticated upload for team_photos" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'team_photos');
+
+DROP POLICY IF EXISTS "Public storage read for chat_photos" ON storage.objects;
+CREATE POLICY "Public storage read for chat_photos" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'chat_photos');
+
+DROP POLICY IF EXISTS "Authenticated upload for chat_photos" ON storage.objects;
+CREATE POLICY "Authenticated upload for chat_photos" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'chat_photos');
+
 -- You can add initial users and sample logs after you create your Supabase project and auth setup.
+
