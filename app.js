@@ -23,7 +23,8 @@ const logViewState = {
   search: '',
   progress: 'all',
   evangelist: 'all',
-  sort: 'date-desc'
+  sort: 'date-desc',
+  limit: 20
 };
 let logRenderVersion = 0;
 
@@ -992,7 +993,9 @@ async function renderLogs() {
   if (renderVersion !== logRenderVersion) return;
 
   const logList = document.getElementById('log-list');
+  const loadMoreContainer = document.getElementById('log-load-more-container');
   logList.innerHTML = '';
+  if (loadMoreContainer) loadMoreContainer.innerHTML = '';
 
   const targetGroup = getEffectiveGroupName();
   const relevantLogs = logs.filter(l => currentUser.role === 'super_admin'
@@ -1024,7 +1027,9 @@ async function renderLogs() {
     return;
   }
 
-  filteredLogs.forEach(log => {
+  const visibleLogs = filteredLogs.slice(0, logViewState.limit || 20);
+
+  visibleLogs.forEach(log => {
     const isAuthorized = ['super_admin', 'director', 'admin'].includes(currentUser.role) || log.authorId === currentUser.id;
 
     const li = document.createElement('li');
@@ -1077,6 +1082,18 @@ async function renderLogs() {
     `;
     logList.appendChild(li);
   });
+
+  if (loadMoreContainer && filteredLogs.length > visibleLogs.length) {
+    loadMoreContainer.innerHTML = `
+      <button type="button" id="btn-load-more-logs" class="btn-load-more">
+        Load More Chats (${visibleLogs.length} of ${filteredLogs.length} shown)
+      </button>
+    `;
+    document.getElementById('btn-load-more-logs').addEventListener('click', () => {
+      logViewState.limit = (logViewState.limit || 20) + 20;
+      renderLogs();
+    });
+  }
 }
 
 function getLogCreatedAtTime(log) {
@@ -1149,6 +1166,7 @@ function updateLogFilterOptions(logs) {
     if (id === 'log-progress-filter') logViewState.progress = control.value;
     if (id === 'log-evangelist-filter') logViewState.evangelist = control.value;
     if (id === 'log-sort') logViewState.sort = control.value;
+    logViewState.limit = 20;
     renderLogs();
   });
   control.addEventListener('change', () => control.dispatchEvent(new Event('input')));
