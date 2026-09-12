@@ -251,6 +251,22 @@ function slugifyGroupName(value) {
     .replace(/^_+|_+$/g, '') || 'group';
 }
 
+function generateGroupId() {
+  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const randomValues = new Uint32Array(20);
+
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(randomValues);
+  } else {
+    for (let index = 0; index < randomValues.length; index += 1) {
+      randomValues[index] = Math.floor(Math.random() * 0xffffffff);
+    }
+  }
+
+  const randomPart = Array.from(randomValues, value => characters[value % characters.length]).join('');
+  return `group_${randomPart}`;
+}
+
 function getEffectiveGroupId() {
   if (currentUser && currentUser.role !== 'super_admin' && currentUser.groupId) {
     return currentUser.groupId;
@@ -2002,7 +2018,7 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
       if (!groupId) {
         const { data: insertedGroup, error: insertGroupError } = await supabase
           .from('groups')
-          .insert([{ id: String(Date.now()), name: targetGroup }])
+          .insert([{ id: generateGroupId(), name: targetGroup }])
           .select('id');
 
         if (insertGroupError) {
@@ -2392,7 +2408,7 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
   }
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-  const groupId = slugifyGroupName(groupName);
+  const groupId = generateGroupId();
   const directorId = 'dir_' + Date.now();
   const newDirector = {
     id: directorId,
@@ -2774,7 +2790,7 @@ document.getElementById('edit-user-form').addEventListener('submit', async (e) =
       if (!groupRows || !groupRows.length) {
         const { data: insertedGroup, error: insertGroupError } = await supabase
           .from('groups')
-          .upsert([{ id: slugifyGroupName(updatedGroupName), name: updatedGroupName }], { onConflict: 'id' })
+          .upsert([{ id: generateGroupId(), name: updatedGroupName }], { onConflict: 'id' })
           .select('id');
 
         if (insertGroupError) {
