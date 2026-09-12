@@ -677,6 +677,7 @@ async function setActiveGroupContext(groupName) {
   document.getElementById('team-name').value = groupName;
   const timezone = await getEffectiveGroupTimezone();
   populateTimezoneSelect('team-timezone', timezone);
+  document.getElementById('team-timezone').disabled = false;
   switchTab('tab-tracker');
   renderEvangelistCheckboxes();
   await renderLogs();
@@ -893,7 +894,8 @@ async function showDashboard() {
   const isDirectorView = isSuper && getStoredArray('evangelism_team').some(member => (
     member.role === 'director' && member.groupName === activeGroupName
   ));
-  const canRenameTeam = isDirector || isDirectorView;
+  const canRenameTeam = isSuper || isDirector || isDirectorView;
+  const canChangeTimezone = isSuper || isDirector;
   const groupTimezone = await getEffectiveGroupTimezone();
 
   // Nav Visibility
@@ -911,6 +913,7 @@ async function showDashboard() {
     document.getElementById('team-name').value = getEffectiveGroupName() || '';
     populateTimezoneSelect('team-timezone', groupTimezone);
   }
+  document.getElementById('team-timezone').disabled = !canChangeTimezone;
   populateTimezoneSelect('new-group-timezone', getBrowserTimezone());
   const memberRoleSelect = document.getElementById('member-role');
   memberRoleSelect.disabled = isAdmin;
@@ -2045,7 +2048,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
     member.role === 'director' && member.groupName === activeGroupName
   ));
   if (!currentUser || (currentUser.role !== 'director' && !isDirectorView && currentUser.role !== 'super_admin')) {
-    alert('Only the team director can change the team name.');
+    alert('Only the team director or system admin can change group settings.');
     return;
   }
 
@@ -2054,18 +2057,43 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   const newTimezone = document.getElementById('team-timezone').value;
   if (!newName || (!newTimezone && newName === oldName)) return;
 
-  const localTeam = getStoredArray('evangelism_team');
-  if (newName !== oldName && localTeam.some(member => member.groupName === newName)) {
-    alert('A team with that name already exists.');
+  const currentTimezone = await getEffectiveGroupTimezone();
+  if (newTimezone !== currentTimezone && !['director', 'super_admin'].includes(currentUser.role)) {
+    alert('Only the team director or system admin can change the group timezone.');
     return;
   }
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  const currentGroupId = await getEffectiveGroupIdAsync();
+  if (newName !== oldName) {
+    let duplicateGroupExists = false;
+    if (supabase) {
+      const { data: matchingGroups, error: groupLookupError } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('name', newName)
+        .limit(1);
+      duplicateGroupExists = !groupLookupError && matchingGroups && matchingGroups.some(group => group.id !== currentGroupId);
+    } else {
+      const localTeam = getStoredArray('evangelism_team');
+      duplicateGroupExists = localTeam.some(member => member.groupName === newName && member.groupName !== oldName);
+    }
+
+    if (duplicateGroupExists) {
+      alert('A team with that name already exists.');
+      return;
+    }
+  }
+
   if (supabase) {
-    const groupId = await getEffectiveGroupIdAsync();
+    const groupId = currentGroupId;
+    const groupUpdate = { name: newName };
+    if (['director', 'super_admin'].includes(currentUser.role)) {
+      groupUpdate.timezone = newTimezone;
+    }
     const { error } = await supabase
       .from('groups')
-      .update({ name: newName, timezone: newTimezone })
+      .update(groupUpdate)
       .eq('id', groupId);
 
     if (error) {
@@ -2091,7 +2119,9 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
 
   if (currentUser.role === 'director') currentUser.groupName = newName;
   activeGroupName = newName;
-  await setEffectiveGroupTimezone(newTimezone);
+  if (['director', 'super_admin'].includes(currentUser.role)) {
+    await setEffectiveGroupTimezone(newTimezone);
+  }
   groupBadge.textContent = currentUser.role === 'super_admin' ? `${newName} (Admin View)` : newName;
   document.getElementById('team-name').value = newName;
   populateTimezoneSelect('team-timezone', newTimezone);
