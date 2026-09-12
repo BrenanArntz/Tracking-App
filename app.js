@@ -2055,7 +2055,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   if (!newName || (!newTimezone && newName === oldName)) return;
 
   const localTeam = getStoredArray('evangelism_team');
-  if (localTeam.some(member => member.groupName === newName)) {
+  if (newName !== oldName && localTeam.some(member => member.groupName === newName)) {
     alert('A team with that name already exists.');
     return;
   }
