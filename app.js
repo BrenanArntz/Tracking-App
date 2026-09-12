@@ -15,6 +15,81 @@ function toLocalDateTimeInput(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function getBrowserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
+function getTimezoneOptions() {
+  const supportedTimezones = typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone')
+    : [];
+  if (!supportedTimezones.includes('UTC')) supportedTimezones.unshift('UTC');
+
+  if (typeof Intl.supportedValuesOf === 'function') {
+    return supportedTimezones;
+  }
+  return [
+    'UTC', 'America/Los_Angeles', 'America/Denver', 'America/Chicago',
+    'America/New_York', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris',
+    'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore',
+    'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'
+  ];
+}
+
+function populateTimezoneSelect(selectId, selectedTimezone) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  const options = getTimezoneOptions();
+  if (selectedTimezone && !options.includes(selectedTimezone)) options.unshift(selectedTimezone);
+  select.innerHTML = options.map(timezone => (
+    `<option value="${escapeHtml(timezone)}">${escapeHtml(timezone.replace(/_/g, ' '))}</option>`
+  )).join('');
+  select.value = selectedTimezone && options.includes(selectedTimezone)
+    ? selectedTimezone
+    : getBrowserTimezone();
+}
+
+function getTimezoneDateParts(date, timezone) {
+  return Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+}
+
+function formatDateForTimezone(date, timezone) {
+  const parts = getTimezoneDateParts(date, timezone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function timezoneOffsetMilliseconds(date, timezone) {
+  const parts = getTimezoneDateParts(date, timezone);
+  const asUTC = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour), Number(parts.minute), Number(parts.second)
+  );
+  return asUTC - date.getTime();
+}
+
+function localDateTimeToUTC(value, timezone) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) return new Date(value).toISOString();
+
+  const localAsUTC = Date.UTC(
+    Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+    Number(match[4]), Number(match[5])
+  );
+  let utcMilliseconds = localAsUTC - timezoneOffsetMilliseconds(new Date(localAsUTC), timezone);
+  utcMilliseconds = localAsUTC - timezoneOffsetMilliseconds(new Date(utcMilliseconds), timezone);
+  return new Date(utcMilliseconds).toISOString();
+}
+
+function utcToTimezoneDateTimeInput(value, timezone) {
+  const parts = getTimezoneDateParts(new Date(value), timezone);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
 // --- STATE MANAGEMENT ---
 let currentUser = null;
 let activeGroupName = null;
@@ -159,6 +234,7 @@ async function loadEventsFromSupabase() {
 
   try {
     const groupId = await getEffectiveGroupIdAsync();
+    const groupTimezone = await getEffectiveGroupTimezone();
     const { data: eventsData, error: eventsError } = await supabase
       .from('events')
       .select('*, groups!group_id(name)')
@@ -192,7 +268,8 @@ async function loadEventsFromSupabase() {
       id: String(event.id),
       groupName: event.groups && event.groups.name ? event.groups.name : getEffectiveGroupName(),
       title: event.title,
-      datetime: toLocalDateTimeInput(event.event_datetime),
+      datetime: event.event_datetime,
+      timezone: event.event_timezone || groupTimezone,
       status: event.status || 'Confirmed',
       location: event.location,
       description: event.description || '',
@@ -557,6 +634,40 @@ function getEffectiveGroupName() {
   return currentUser.groupName || '';
 }
 
+async function getEffectiveGroupTimezone() {
+  if (currentUser && currentUser.groupTimezone && currentUser.role !== 'super_admin') {
+    return currentUser.groupTimezone;
+  }
+
+  const groupId = await getEffectiveGroupIdAsync();
+  const cachedTimezones = JSON.parse(localStorage.getItem('evangelism_group_timezones') || '{}');
+  if (cachedTimezones[groupId]) return cachedTimezones[groupId];
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase && groupId !== 'system') {
+    const { data: groupRows, error } = await supabase
+      .from('groups')
+      .select('timezone')
+      .eq('id', groupId)
+      .limit(1);
+    if (!error && groupRows && groupRows[0] && groupRows[0].timezone) {
+      cachedTimezones[groupId] = groupRows[0].timezone;
+      localStorage.setItem('evangelism_group_timezones', JSON.stringify(cachedTimezones));
+      return groupRows[0].timezone;
+    }
+  }
+
+  return getBrowserTimezone();
+}
+
+async function setEffectiveGroupTimezone(timezone) {
+  const groupId = await getEffectiveGroupIdAsync();
+  const cachedTimezones = JSON.parse(localStorage.getItem('evangelism_group_timezones') || '{}');
+  cachedTimezones[groupId] = timezone;
+  localStorage.setItem('evangelism_group_timezones', JSON.stringify(cachedTimezones));
+  if (currentUser && currentUser.role !== 'super_admin') currentUser.groupTimezone = timezone;
+}
+
 async function setActiveGroupContext(groupName) {
   if (!groupName || !currentUser || currentUser.role !== 'super_admin') return;
   activeGroupName = groupName;
@@ -564,6 +675,8 @@ async function setActiveGroupContext(groupName) {
   groupBadge.textContent = `${groupName} (Admin View)`;
   document.getElementById('rename-team-card').style.display = 'block';
   document.getElementById('team-name').value = groupName;
+  const timezone = await getEffectiveGroupTimezone();
+  populateTimezoneSelect('team-timezone', timezone);
   switchTab('tab-tracker');
   renderEvangelistCheckboxes();
   await renderLogs();
@@ -781,6 +894,7 @@ async function showDashboard() {
     member.role === 'director' && member.groupName === activeGroupName
   ));
   const canRenameTeam = isDirector || isDirectorView;
+  const groupTimezone = await getEffectiveGroupTimezone();
 
   // Nav Visibility
   navTeamTab.style.display = 'inline-block';
@@ -793,14 +907,18 @@ async function showDashboard() {
   document.getElementById('edit-resource-default-row').style.display = isSuper ? 'inline-flex' : 'none';
   document.getElementById('add-member-card').style.display = isLeader ? 'block' : 'none';
   document.getElementById('rename-team-card').style.display = canRenameTeam ? 'block' : 'none';
-  if (canRenameTeam) document.getElementById('team-name').value = getEffectiveGroupName() || '';
+  if (canRenameTeam) {
+    document.getElementById('team-name').value = getEffectiveGroupName() || '';
+    populateTimezoneSelect('team-timezone', groupTimezone);
+  }
+  populateTimezoneSelect('new-group-timezone', getBrowserTimezone());
   const memberRoleSelect = document.getElementById('member-role');
   memberRoleSelect.disabled = isAdmin;
   memberRoleSelect.closest('.form-group').style.display = isAdmin ? 'none' : 'flex';
   if (isAdmin) memberRoleSelect.value = 'member';
 
   // Default dates
-  document.getElementById('chat-date').valueAsDate = new Date();
+  document.getElementById('chat-date').value = formatDateForTimezone(new Date(), groupTimezone);
   autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
@@ -868,7 +986,7 @@ function getEventNameForDate(date) {
   if (!date) return '';
 
   const matchingEvent = getStoredArray('evangelism_events').find(event => (
-    String(event.datetime || '').slice(0, 10) === date
+    event.datetime && formatDateForTimezone(new Date(event.datetime), event.timezone || getBrowserTimezone()) === date
   ));
   return matchingEvent ? matchingEvent.title || '' : '';
 }
@@ -990,7 +1108,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   localStorage.setItem('evangelism_logs', JSON.stringify(logs));
 
   document.getElementById('tracker-form').reset();
-  document.getElementById('chat-date').valueAsDate = new Date();
+  document.getElementById('chat-date').value = formatDateForTimezone(new Date(), await getEffectiveGroupTimezone());
   autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
@@ -1329,6 +1447,7 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
   const targetGroup = getEffectiveGroupName();
   const eventId = String(Date.now());
   const rawDatetime = document.getElementById('event-date').value;
+  const eventTimezone = await getEffectiveGroupTimezone();
 
   if (!rawDatetime) {
     alert('Please pick a date and time for the event.');
@@ -1339,7 +1458,8 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
     id: eventId,
     groupName: targetGroup,
     title: document.getElementById('event-title').value,
-    datetime: rawDatetime,
+    datetime: localDateTimeToUTC(rawDatetime, eventTimezone),
+    timezone: eventTimezone,
     status: document.getElementById('event-status').value,
     location: document.getElementById('event-title').value,
     description: document.getElementById('event-description').value,
@@ -1351,8 +1471,7 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
     try {
       const groupId = await getEffectiveGroupIdAsync();
 
-      // Convert datetime-local value (no timezone) to UTC ISO string
-      const eventDatetimeUTC = new Date(rawDatetime).toISOString();
+      const eventDatetimeUTC = localDateTimeToUTC(rawDatetime, eventTimezone);
 
       const { error: insertError } = await supabase
         .from('events')
@@ -1361,6 +1480,7 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
           group_id: groupId,
           title: newEvent.title,
           event_datetime: eventDatetimeUTC,
+          event_timezone: eventTimezone,
           status: newEvent.status,
           location: newEvent.location,
           description: newEvent.description
@@ -1398,21 +1518,20 @@ async function renderCalendar() {
   const list = document.getElementById('calendar-event-list');
   list.innerHTML = '';
 
-  const now = new Date();
-  const todayKey = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-');
+  const groupTimezone = await getEffectiveGroupTimezone();
+  const todayKey = formatDateForTimezone(new Date(), groupTimezone);
 
   const targetGroup = getEffectiveGroupName();
 
   // Filter by group
   const upcomingEvents = events.filter(evt => {
-    const eventDateKey = String(evt.datetime || '').slice(0, 10);
     const belongsToGroup = currentUser.role === 'super_admin'
       ? evt.groupName === targetGroup
       : evt.groupName === currentUser.groupName;
+    const eventTimezone = evt.timezone || groupTimezone;
+    const eventDateKey = evt.datetime
+      ? formatDateForTimezone(new Date(evt.datetime), eventTimezone)
+      : '';
 
     return belongsToGroup && eventDateKey >= todayKey;
   });
@@ -1428,7 +1547,9 @@ async function renderCalendar() {
   const isLeader = ['super_admin', 'director', 'admin'].includes(currentUser.role);
 
   upcomingEvents.forEach(evt => {
+    const eventTimezone = evt.timezone || groupTimezone;
     const formattedDate = new Date(evt.datetime).toLocaleString([], {
+      timeZone: eventTimezone,
       weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
@@ -1530,7 +1651,9 @@ window.openEditEventModal = function(eventId) {
 
   document.getElementById('edit-event-id').value = String(evt.id);
   document.getElementById('edit-event-title').value = evt.title;
-  document.getElementById('edit-event-date').value = toLocalDateTimeInput(evt.datetime);
+  document.getElementById('edit-event-date').value = evt.timezone
+    ? utcToTimezoneDateTimeInput(evt.datetime, evt.timezone)
+    : toLocalDateTimeInput(evt.datetime);
   document.getElementById('edit-event-status').value = evt.status;
   document.getElementById('edit-event-description').value = evt.description;
 
@@ -1548,8 +1671,11 @@ document.getElementById('edit-event-form').addEventListener('submit', async (e) 
   const index = events.findIndex(e => String(e.id) === id);
 
   if (index !== -1) {
+    const editedDatetime = document.getElementById('edit-event-date').value;
+    const eventTimezone = events[index].timezone || await getEffectiveGroupTimezone();
     events[index].title = document.getElementById('edit-event-title').value;
-    events[index].datetime = document.getElementById('edit-event-date').value;
+    events[index].datetime = localDateTimeToUTC(editedDatetime, eventTimezone);
+    events[index].timezone = eventTimezone;
     events[index].status = document.getElementById('edit-event-status').value;
     events[index].location = events[index].title;
     events[index].description = document.getElementById('edit-event-description').value;
@@ -1561,7 +1687,8 @@ document.getElementById('edit-event-form').addEventListener('submit', async (e) 
           .from('events')
           .update({
             title: events[index].title,
-            event_datetime: new Date(events[index].datetime).toISOString(),
+            event_datetime: events[index].datetime,
+            event_timezone: events[index].timezone,
             status: events[index].status,
             location: events[index].location,
             description: events[index].description,
@@ -1924,7 +2051,8 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
 
   const oldName = getEffectiveGroupName();
   const newName = document.getElementById('team-name').value.trim();
-  if (!newName || newName === oldName) return;
+  const newTimezone = document.getElementById('team-timezone').value;
+  if (!newName || (!newTimezone && newName === oldName)) return;
 
   const localTeam = getStoredArray('evangelism_team');
   if (localTeam.some(member => member.groupName === newName)) {
@@ -1937,7 +2065,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
     const groupId = await getEffectiveGroupIdAsync();
     const { error } = await supabase
       .from('groups')
-      .update({ name: newName })
+      .update({ name: newName, timezone: newTimezone })
       .eq('id', groupId);
 
     if (error) {
@@ -1963,8 +2091,10 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
 
   if (currentUser.role === 'director') currentUser.groupName = newName;
   activeGroupName = newName;
+  await setEffectiveGroupTimezone(newTimezone);
   groupBadge.textContent = currentUser.role === 'super_admin' ? `${newName} (Admin View)` : newName;
   document.getElementById('team-name').value = newName;
+  populateTimezoneSelect('team-timezone', newTimezone);
 
   await renderTeam();
   renderEvangelistCheckboxes();
@@ -2016,9 +2146,10 @@ document.getElementById('add-member-form').addEventListener('submit', async (e) 
       let groupId = groupRows && groupRows.length ? groupRows[0].id : null;
 
       if (!groupId) {
+        const groupTimezone = await getEffectiveGroupTimezone();
         const { data: insertedGroup, error: insertGroupError } = await supabase
           .from('groups')
-          .insert([{ id: generateGroupId(), name: targetGroup }])
+          .insert([{ id: generateGroupId(), name: targetGroup, timezone: groupTimezone }])
           .select('id');
 
         if (insertGroupError) {
@@ -2324,11 +2455,12 @@ async function renderTeam() {
 
 async function renderTeamStats() {
   const logs = await loadChatLogsFromSupabase();
+  const groupTimezone = await getEffectiveGroupTimezone();
   const targetGroup = getEffectiveGroupName();
   const groupLogs = logs.filter(log => currentUser.role === 'super_admin'
     ? log.groupName === targetGroup
     : log.groupName === currentUser.groupName);
-  const relevantLogs = groupLogs.filter(log => isLogInStatsRange(log.date));
+  const relevantLogs = groupLogs.filter(log => isLogInStatsRange(log.date, groupTimezone));
 
   const totalConversations = relevantLogs.length;
   const heardGospel = relevantLogs.reduce((total, log) => total + Number(log.heardGospelCount || 0), 0);
@@ -2374,22 +2506,22 @@ async function renderTeamStats() {
   }).join('');
 }
 
-function isLogInStatsRange(logDate) {
+function isLogInStatsRange(logDate, timezone) {
   if (selectedStatsRange === 'all') return true;
   if (!logDate || !/^\d{4}-\d{2}-\d{2}$/.test(logDate)) return false;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const logDay = new Date(`${logDate}T00:00:00`);
-  let startDate = new Date(today);
+  const todayKey = formatDateForTimezone(new Date(), timezone);
+  const today = new Date(`${todayKey}T00:00:00Z`);
+  const logDay = new Date(`${logDate}T00:00:00Z`);
+  const startDate = new Date(today);
 
   if (selectedStatsRange === 'today') {
-    return logDay.getTime() === today.getTime();
+    return logDate === todayKey;
   }
 
-  if (selectedStatsRange === 'week') startDate.setDate(startDate.getDate() - 6);
-  if (selectedStatsRange === 'month') startDate.setMonth(startDate.getMonth() - 1);
-  if (selectedStatsRange === 'six-months') startDate.setMonth(startDate.getMonth() - 6);
+  if (selectedStatsRange === 'week') startDate.setUTCDate(startDate.getUTCDate() - 6);
+  if (selectedStatsRange === 'month') startDate.setUTCMonth(startDate.getUTCMonth() - 1);
+  if (selectedStatsRange === 'six-months') startDate.setUTCMonth(startDate.getUTCMonth() - 6);
 
   return logDay >= startDate && logDay <= today;
 }
@@ -2401,8 +2533,9 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
   const groupName = document.getElementById('group-name').value.trim();
   const directorName = document.getElementById('director-name').value.trim();
   const directorEmail = document.getElementById('director-email').value.trim();
+  const groupTimezone = document.getElementById('new-group-timezone').value;
 
-  if (!groupName || !directorName || !directorEmail) {
+  if (!groupName || !directorName || !directorEmail || !groupTimezone) {
     alert('Please complete the group name, director name, and director email.');
     return;
   }
@@ -2435,7 +2568,7 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
       } else {
         const { data: insertedGroup, error: insertGroupError } = await supabase
           .from('groups')
-          .upsert([{ id: resolvedGroupId, name: groupName }], { onConflict: 'id' })
+          .upsert([{ id: resolvedGroupId, name: groupName, timezone: groupTimezone }], { onConflict: 'id' })
           .select('id');
 
         if (insertGroupError) {

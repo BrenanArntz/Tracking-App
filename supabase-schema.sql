@@ -3,6 +3,7 @@
 CREATE TABLE IF NOT EXISTS groups (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
+  timezone TEXT NOT NULL DEFAULT 'UTC',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS events (
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   event_datetime TIMESTAMPTZ NOT NULL,
+  event_timezone TEXT NOT NULL DEFAULT 'UTC',
   status TEXT NOT NULL DEFAULT 'Confirmed',
   location TEXT NOT NULL,
   description TEXT DEFAULT '',
@@ -80,9 +82,20 @@ CREATE TABLE IF NOT EXISTS resources (
 
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
 ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
 ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS photo_date DATE DEFAULT CURRENT_DATE;
 ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_timezone TEXT;
+
+UPDATE events
+SET event_timezone = groups.timezone
+FROM groups
+WHERE events.group_id = groups.id
+  AND events.event_timezone IS NULL;
+
+ALTER TABLE events ALTER COLUMN event_timezone SET DEFAULT 'UTC';
+ALTER TABLE events ALTER COLUMN event_timezone SET NOT NULL;
 
 -- RLS policies for authenticated users and group-scoped application access.
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
