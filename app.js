@@ -1586,13 +1586,21 @@ window.deleteLog = async function(logId) {
 };
 
 // --- CALENDAR MANAGEMENT ---
-function refreshEventSuggestions(events = getStoredArray('evangelism_events')) {
+const EVENT_NAME_HISTORY_KEY = 'evangelism_event_name_history';
+
+function getEventNameHistory() {
+  return getStoredArray(EVENT_NAME_HISTORY_KEY);
+}
+
+function refreshEventSuggestions(query = '') {
   const datalist = document.getElementById('event-name-suggestions');
   if (!datalist) return;
 
-  const suggestions = [...new Set(events.flatMap(event => [event.title, event.location]))]
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  const suggestions = getEventNameHistory()
     .map(value => String(value || '').trim())
     .filter(Boolean)
+    .filter(value => !normalizedQuery || value.toLowerCase().includes(normalizedQuery))
     .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
 
   datalist.innerHTML = '';
@@ -1602,6 +1610,23 @@ function refreshEventSuggestions(events = getStoredArray('evangelism_events')) {
     datalist.appendChild(option);
   });
 }
+
+function rememberEventName(value) {
+  const name = String(value || '').trim();
+  if (!name) return;
+
+  const history = getEventNameHistory().filter(entry => entry.toLowerCase() !== name.toLowerCase());
+  history.unshift(name);
+  localStorage.setItem(EVENT_NAME_HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+  refreshEventSuggestions(name);
+}
+
+refreshEventSuggestions();
+
+['event-title', 'edit-event-title'].forEach(id => {
+  const input = document.getElementById(id);
+  if (input) input.addEventListener('input', () => refreshEventSuggestions(input.value));
+});
 
 document.getElementById('event-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1627,6 +1652,7 @@ document.getElementById('event-form').addEventListener('submit', async (e) => {
     description: document.getElementById('event-description').value,
     rsvps: {}
   };
+  rememberEventName(newEvent.title);
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
   if (supabase) {
@@ -1676,7 +1702,6 @@ async function renderCalendar() {
   if (!ensureUserSession()) return;
 
   const events = await loadEventsFromSupabase();
-  refreshEventSuggestions(events);
   const team = getStoredArray('evangelism_team');
   const list = document.getElementById('calendar-event-list');
   list.innerHTML = '';
@@ -1812,8 +1837,6 @@ window.openEditEventModal = function(eventId) {
   const evt = events.find(e => String(e.id) === String(eventId));
   if (!evt) return;
 
-  refreshEventSuggestions(events);
-
   document.getElementById('edit-event-id').value = String(evt.id);
   document.getElementById('edit-event-title').value = evt.title;
   document.getElementById('edit-event-date').value = evt.timezone
@@ -1844,6 +1867,7 @@ document.getElementById('edit-event-form').addEventListener('submit', async (e) 
     events[index].status = document.getElementById('edit-event-status').value;
     events[index].location = events[index].title;
     events[index].description = document.getElementById('edit-event-description').value;
+    rememberEventName(events[index].title);
 
     const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
     if (supabase) {
