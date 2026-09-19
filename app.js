@@ -94,6 +94,7 @@ function utcToTimezoneDateTimeInput(value, timezone) {
 let currentUser = null;
 let activeGroupName = null;
 let selectedStatsRange = 'all';
+let chatDateDefault = '';
 const logViewState = {
   search: '',
   progress: 'all',
@@ -206,7 +207,7 @@ async function loadChatLogsFromSupabase() {
     const mapped = data.map(log => ({
       id: log.id,
       authorId: log.author_id,
-      authorName: log.author_name || '',
+      authorName: log.author_name || getChatAuthorName({ authorId: log.author_id }),
       groupName: getEffectiveGroupName(),
       name: log.person_name,
       date: log.log_date,
@@ -599,6 +600,58 @@ function getProgressLabel(level) {
   return labels[String(level)] || '0 - No Progress';
 }
 
+function getProgressSymbol(level) {
+  const symbols = {
+    0: '🌑',
+    1: '🌌',
+    2: '⚖️',
+    3: '🧩',
+    4: '✝️',
+    5: '🧠',
+    6: '✔️',
+    7: '✅',
+    8: '😇'
+  };
+
+  return symbols[String(level)] || symbols[0];
+}
+
+function getChatAuthorName(log) {
+  if (log && log.authorName) return log.authorName;
+  if (currentUser && log && String(log.authorId) === String(currentUser.id)) return currentUser.name;
+
+  const author = getStoredArray('evangelism_team').find(member => (
+    String(member.id) === String(log && log.authorId)
+  ));
+  return author ? author.name : '';
+}
+
+function getTypedEvangelistNames(value) {
+  return String(value || '')
+    .split(',')
+    .map(name => name.trim())
+    .filter(Boolean);
+}
+
+function mergeEvangelistNames(names) {
+  const seen = new Set();
+  return names.filter(name => {
+    const normalized = name.toLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function toggleAdditionalEvangelists(isEdit, show) {
+  const input = document.getElementById(isEdit ? 'edit-additional-evangelists' : 'additional-evangelists');
+  const button = document.getElementById(isEdit ? 'show-edit-additional-evangelists' : 'show-additional-evangelists');
+  if (!input || !button) return;
+
+  input.style.display = show ? 'block' : 'none';
+  button.textContent = show ? 'Hide extra participants' : 'Add more';
+}
+
 function syncLogCounters(isEdit = false) {
   const progressSelect = document.getElementById(isEdit ? 'edit-chat-progress' : 'chat-progress');
   const heardRow = document.getElementById(isEdit ? 'edit-heard-gospel-row' : 'heard-gospel-row');
@@ -678,6 +731,7 @@ async function setActiveGroupContext(groupName) {
   const timezone = await getEffectiveGroupTimezone();
   populateTimezoneSelect('team-timezone', timezone);
   document.getElementById('team-timezone').disabled = false;
+  await refreshChatDateDefault(true);
   switchTab('tab-tracker');
   renderEvangelistCheckboxes();
   await renderLogs();
@@ -921,7 +975,7 @@ async function showDashboard() {
   if (isAdmin) memberRoleSelect.value = 'member';
 
   // Default dates
-  document.getElementById('chat-date').value = formatDateForTimezone(new Date(), groupTimezone);
+  await refreshChatDateDefault(true);
   autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
@@ -994,6 +1048,17 @@ function getEventNameForDate(date) {
   return matchingEvent ? matchingEvent.title || '' : '';
 }
 
+async function refreshChatDateDefault(force = false) {
+  const dateInput = document.getElementById('chat-date');
+  if (!dateInput) return;
+
+  const today = formatDateForTimezone(new Date(), await getEffectiveGroupTimezone());
+  if (force || !dateInput.value || dateInput.value === chatDateDefault) {
+    dateInput.value = today;
+    chatDateDefault = today;
+  }
+}
+
 function autofillChatLocation(isEdit = false) {
   const dateInput = document.getElementById(isEdit ? 'edit-chat-date' : 'chat-date');
   const locationInput = document.getElementById(isEdit ? 'edit-chat-location' : 'chat-location');
@@ -1005,10 +1070,28 @@ function autofillChatLocation(isEdit = false) {
 
 document.getElementById('chat-date').addEventListener('change', () => autofillChatLocation());
 document.getElementById('edit-chat-date').addEventListener('change', () => autofillChatLocation(true));
+document.getElementById('show-additional-evangelists').addEventListener('click', () => {
+  const input = document.getElementById('additional-evangelists');
+  toggleAdditionalEvangelists(false, input.style.display === 'none');
+});
+document.getElementById('show-edit-additional-evangelists').addEventListener('click', () => {
+  const input = document.getElementById('edit-additional-evangelists');
+  toggleAdditionalEvangelists(true, input.style.display === 'none');
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentUser) refreshChatDateDefault();
+});
 
 // --- EVANGELIST CHECKBOXES ---
 function renderEvangelistCheckboxes(container = document.getElementById('evangelists-checkbox-group'), selected = []) {
   if (!ensureUserSession()) return;
+
+  const addButtonId = container.id === 'edit-evangelists-checkbox-group'
+    ? 'show-edit-additional-evangelists'
+    : 'show-additional-evangelists';
+  const addButton = document.getElementById(addButtonId);
+  if (addButton && addButton.parentElement === container) container.removeChild(addButton);
 
   const team = getStoredArray('evangelism_team');
   const targetGroup = getEffectiveGroupName();
@@ -1029,15 +1112,20 @@ function renderEvangelistCheckboxes(container = document.getElementById('evangel
     `;
     container.appendChild(label);
   });
+
+  if (addButton) container.appendChild(addButton);
 }
 
 // --- LOG CREATION & RENDER ---
 document.getElementById('tracker-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  await refreshChatDateDefault();
+
   const selectedEvangelists = Array.from(
     document.getElementById('evangelists-checkbox-group').querySelectorAll('input[type="checkbox"]:checked')
   ).map(cb => cb.value);
+  const additionalEvangelists = getTypedEvangelistNames(document.getElementById('additional-evangelists').value);
 
   const photoInput = document.getElementById('chat-photo');
   let photoData = '';
@@ -1064,7 +1152,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
     name: document.getElementById('person-name').value,
     date: document.getElementById('chat-date').value,
     location: document.getElementById('chat-location').value,
-    evangelists: selectedEvangelists,
+    evangelists: mergeEvangelistNames([...selectedEvangelists, ...additionalEvangelists]),
     progress: progress,
     heardGospelCount: progress >= 4 && progress <= 7 ? heardGospelCount : 0,
     professedCount: progress === 7 ? professedCount : 0,
@@ -1111,11 +1199,13 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   localStorage.setItem('evangelism_logs', JSON.stringify(logs));
 
   document.getElementById('tracker-form').reset();
-  document.getElementById('chat-date').value = formatDateForTimezone(new Date(), await getEffectiveGroupTimezone());
+  await refreshChatDateDefault(true);
   autofillChatLocation();
   document.getElementById('heard-gospel-count').value = 1;
   document.getElementById('professed-count').value = 1;
   document.getElementById('chat-photo-delete').value = 'false';
+  document.getElementById('additional-evangelists').value = '';
+  toggleAdditionalEvangelists(false, false);
   document.getElementById('clear-chat-photo').style.display = 'none';
   syncLogCounters(false);
   renderEvangelistCheckboxes();
@@ -1182,18 +1272,9 @@ async function renderLogs() {
       ? `<img src="${escapeHtml(photoUrl)}" alt="Conversation photo" class="log-photo" />`
       : '';
 
-    const heardGospelCount = Number(log.heardGospelCount || 0);
-    const professedCount = Number(log.professedCount || 0);
-    const counterHtml = (Number(log.progress || 0) >= 4 && Number(log.progress || 0) <= 7)
-      ? `<div class="log-counter-row">Heard the Gospel: ${escapeHtml(String(heardGospelCount))}</div>`
-      : '';
-    const professedHtml = Number(log.progress || 0) === 7
-      ? `<div class="log-counter-row">Professed: ${escapeHtml(String(professedCount))}</div>`
-      : '';
-
     const progressHtml = `
       <div class="log-progress">
-        <span class="progress-label">Progress:</span>
+        <span class="progress-symbol" aria-hidden="true">${getProgressSymbol(log.progress)}</span>
         <span class="progress-value">${escapeHtml(getProgressLabel(log.progress))}</span>
       </div>
     `;
@@ -1204,9 +1285,8 @@ async function renderLogs() {
         <span class="log-item-date">${escapeHtml(log.date)}</span>
       </div>
       <div class="evangelist-tags">${tagsHtml}</div>
+      ${log.location ? `<div class="log-item-location">${escapeHtml(log.location)}</div>` : ''}
       ${progressHtml}
-      ${counterHtml}
-      ${professedHtml}
       ${photoHtml}
       <p class="log-item-notes">${escapeHtml(log.notes || 'No notes added.')}</p>
 
@@ -1217,6 +1297,19 @@ async function renderLogs() {
         </div>
       ` : ''}
     `;
+    li.setAttribute('role', 'button');
+    li.tabIndex = 0;
+    li.setAttribute('aria-label', `View details for ${log.name}`);
+    li.addEventListener('click', (event) => {
+      if (event.target.closest('button, a, input, select, textarea')) return;
+      openChatDetails(log.id);
+    });
+    li.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openChatDetails(log.id);
+      }
+    });
     logList.appendChild(li);
   });
 
@@ -1232,6 +1325,47 @@ async function renderLogs() {
     });
   }
 }
+
+window.openChatDetails = function(logId) {
+  const logs = getStoredArray('evangelism_logs');
+  const log = logs.find(item => String(item.id) === String(logId));
+  if (!log) return;
+
+  document.getElementById('chat-details-title').textContent = log.name || 'Conversation Details';
+  document.getElementById('chat-details-date').textContent = log.date || 'Not provided';
+  document.getElementById('chat-details-location').textContent = log.location || 'Not provided';
+  document.getElementById('chat-details-progress').textContent = `${getProgressSymbol(log.progress)} ${getProgressLabel(log.progress)}`;
+  document.getElementById('chat-details-author').textContent = getChatAuthorName(log) || 'Not provided';
+  document.getElementById('chat-details-evangelists').innerHTML = (log.evangelists || []).length
+    ? log.evangelists.map(name => `<span class="tag">${escapeHtml(name)}</span>`).join('')
+    : '<span class="detail-empty">None listed</span>';
+
+  const counters = [];
+  if (Number(log.progress || 0) >= 4 && Number(log.progress || 0) <= 7) {
+    counters.push(`Heard the Gospel: ${Number(log.heardGospelCount || 0)}`);
+  }
+  if (Number(log.progress || 0) === 7) {
+    counters.push(`Professed: ${Number(log.professedCount || 0)}`);
+  }
+  document.getElementById('chat-details-counters').textContent = counters.join(' | ');
+  document.getElementById('chat-details-notes').textContent = log.notes || 'No notes added.';
+
+  const photo = document.getElementById('chat-details-photo');
+  const photoUrl = typeof log.photo === 'string' ? log.photo.trim() : '';
+  if (photoUrl && !['null', 'undefined'].includes(photoUrl.toLowerCase())) {
+    photo.src = photoUrl;
+    photo.style.display = 'block';
+  } else {
+    photo.removeAttribute('src');
+    photo.style.display = 'none';
+  }
+
+  document.getElementById('chat-details-modal').classList.add('active');
+};
+
+document.getElementById('close-chat-details-btn').addEventListener('click', () => {
+  document.getElementById('chat-details-modal').classList.remove('active');
+});
 
 function getLogCreatedAtTime(log) {
   if (!log) return 0;
@@ -1329,6 +1463,12 @@ window.openEditModal = function(logId) {
   document.getElementById('edit-heard-gospel-count').value = Number(log.heardGospelCount || 1);
   document.getElementById('edit-professed-count').value = Number(log.professedCount || 1);
   document.getElementById('edit-chat-notes').value = log.notes;
+  const teamNames = new Set(getStoredArray('evangelism_team').map(member => String(member.name || '').toLowerCase()));
+  const additionalEvangelists = (log.evangelists || [])
+    .filter(name => !teamNames.has(String(name).toLowerCase()))
+    .join(', ');
+  document.getElementById('edit-additional-evangelists').value = additionalEvangelists;
+  toggleAdditionalEvangelists(true, Boolean(additionalEvangelists));
   if (photoInput) photoInput.value = '';
   if (deleteFlag) deleteFlag.value = 'false';
 
@@ -1365,12 +1505,14 @@ document.getElementById('edit-tracker-form').addEventListener('submit', async (e
     const checkboxes = document.getElementById('edit-evangelists-checkbox-group').querySelectorAll('input[type="checkbox"]:checked');
     const photoInput = document.getElementById('edit-chat-photo');
     const progressValue = Number(document.getElementById('edit-chat-progress').value || 0);
+    const selectedEvangelists = Array.from(checkboxes).map(cb => cb.value);
+    const additionalEvangelists = getTypedEvangelistNames(document.getElementById('edit-additional-evangelists').value);
 
     logs[index].name = document.getElementById('edit-person-name').value;
     logs[index].date = document.getElementById('edit-chat-date').value;
     logs[index].location = document.getElementById('edit-chat-location').value;
     logs[index].notes = document.getElementById('edit-chat-notes').value;
-    logs[index].evangelists = Array.from(checkboxes).map(cb => cb.value);
+    logs[index].evangelists = mergeEvangelistNames([...selectedEvangelists, ...additionalEvangelists]);
     logs[index].progress = String(progressValue);
     logs[index].heardGospelCount = progressValue >= 4 && progressValue <= 7 ? Number(document.getElementById('edit-heard-gospel-count').value || 1) : 0;
     logs[index].professedCount = progressValue === 7 ? Number(document.getElementById('edit-professed-count').value || 1) : 0;
@@ -1444,6 +1586,23 @@ window.deleteLog = async function(logId) {
 };
 
 // --- CALENDAR MANAGEMENT ---
+function refreshEventSuggestions(events = getStoredArray('evangelism_events')) {
+  const datalist = document.getElementById('event-name-suggestions');
+  if (!datalist) return;
+
+  const suggestions = [...new Set(events.flatMap(event => [event.title, event.location]))]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+
+  datalist.innerHTML = '';
+  suggestions.forEach(suggestion => {
+    const option = document.createElement('option');
+    option.value = suggestion;
+    datalist.appendChild(option);
+  });
+}
+
 document.getElementById('event-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -1517,6 +1676,7 @@ async function renderCalendar() {
   if (!ensureUserSession()) return;
 
   const events = await loadEventsFromSupabase();
+  refreshEventSuggestions(events);
   const team = getStoredArray('evangelism_team');
   const list = document.getElementById('calendar-event-list');
   list.innerHTML = '';
@@ -1651,6 +1811,8 @@ window.openEditEventModal = function(eventId) {
   const events = JSON.parse(localStorage.getItem('evangelism_events') || '[]');
   const evt = events.find(e => String(e.id) === String(eventId));
   if (!evt) return;
+
+  refreshEventSuggestions(events);
 
   document.getElementById('edit-event-id').value = String(evt.id);
   document.getElementById('edit-event-title').value = evt.title;
@@ -2125,6 +2287,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   groupBadge.textContent = currentUser.role === 'super_admin' ? `${newName} (Admin View)` : newName;
   document.getElementById('team-name').value = newName;
   populateTimezoneSelect('team-timezone', newTimezone);
+  await refreshChatDateDefault(true);
 
   await renderTeam();
   renderEvangelistCheckboxes();

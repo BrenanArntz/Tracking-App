@@ -100,6 +100,8 @@
               <div class="form-group">
                 <label>Participating Evangelists</label>
                 <div id="evangelists-checkbox-group" class="checkbox-group"></div>
+                <button type="button" id="show-additional-evangelists" class="checkbox-chip add-person-button">Add more</button>
+                <input type="text" id="additional-evangelists" placeholder="Other participants, separated by commas" style="display: none;">
               </div>
 
               <div class="form-group">
@@ -199,7 +201,8 @@
             <form id="event-form">
               <div class="form-group">
                 <label for="event-title">Event Name/Location</label>
-                <input type="text" id="event-title" placeholder="e.g., Downtown Park Outreach" required>
+                <input type="text" id="event-title" list="event-name-suggestions" placeholder="e.g., Downtown Park Outreach" required>
+                <datalist id="event-name-suggestions"></datalist>
               </div>
               <div class="form-group-row">
                 <div class="form-group flex-1">
@@ -427,6 +430,32 @@
       </main>
     </section>
 
+    <!-- CHAT DETAILS MODAL -->
+    <div id="chat-details-modal" class="modal">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3 id="chat-details-title">Conversation Details</h3>
+          <button id="close-chat-details-btn" class="btn-text" type="button">&times;</button>
+        </div>
+        <div class="chat-details-grid">
+          <div><span class="detail-label">Date</span><strong id="chat-details-date"></strong></div>
+          <div><span class="detail-label">Location</span><strong id="chat-details-location"></strong></div>
+          <div><span class="detail-label">Progress</span><strong id="chat-details-progress"></strong></div>
+          <div><span class="detail-label">Logged by</span><strong id="chat-details-author"></strong></div>
+        </div>
+        <div class="form-group">
+          <span class="detail-label">Participating Evangelists</span>
+          <div id="chat-details-evangelists" class="checkbox-group"></div>
+        </div>
+        <div id="chat-details-counters" class="chat-details-counters"></div>
+        <div class="form-group">
+          <span class="detail-label">Notes</span>
+          <p id="chat-details-notes" class="chat-details-notes"></p>
+        </div>
+        <img id="chat-details-photo" class="photo-preview" alt="Conversation photo" style="display: none;">
+      </div>
+    </div>
+
     <!-- LOG EDIT MODAL -->
     <div id="edit-modal" class="modal">
       <div class="modal-content card">
@@ -451,6 +480,8 @@
           <div class="form-group">
             <label>Participating Evangelists</label>
             <div id="edit-evangelists-checkbox-group" class="checkbox-group"></div>
+            <button type="button" id="show-edit-additional-evangelists" class="checkbox-chip add-person-button">Add more</button>
+            <input type="text" id="edit-additional-evangelists" placeholder="Other participants, separated by commas" style="display: none;">
           </div>
           <div class="form-group">
             <label for="edit-chat-progress">Conversation Progress</label>
@@ -532,7 +563,7 @@
           <input type="hidden" id="edit-event-id">
           <div class="form-group">
             <label for="edit-event-title">Event Name/Location</label>
-            <input type="text" id="edit-event-title" required>
+            <input type="text" id="edit-event-title" list="event-name-suggestions" required>
           </div>
           <div class="form-group-row">
             <div class="form-group flex-1">

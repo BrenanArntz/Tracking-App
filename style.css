@@ -544,6 +544,15 @@ textarea {
   margin-bottom: 12px;
 }
 
+.log-item {
+  cursor: pointer;
+}
+
+.log-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .log-item-header,
 .event-header {
   display: flex;
@@ -570,6 +579,18 @@ textarea {
 .log-item-notes {
   margin: 8px 0 0;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-item-location {
+  margin-top: 8px;
+  color: #dbeafe;
+  font-size: 0.82rem;
 }
 
 .photo-upload-row {
@@ -635,9 +656,56 @@ textarea {
   color: var(--muted);
 }
 
+.progress-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: #fbbf24;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .progress-value {
   color: #e0f2fe;
   font-weight: 700;
+}
+
+.chat-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.chat-details-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.detail-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chat-details-counters {
+  margin: 14px 0;
+  color: #e7f1ff;
+  font-size: 0.88rem;
+}
+
+.chat-details-notes {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.detail-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .conditional-counter {
@@ -806,6 +874,11 @@ textarea {
 
 .checkbox-chip input {
   margin: 0;
+}
+
+.add-person-button {
+  font: inherit;
+  cursor: pointer;
 }
 
 .checkbox-chip.highlighted {
