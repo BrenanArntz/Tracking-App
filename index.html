@@ -123,7 +123,7 @@
                 <label for="heard-gospel-count">How many heard the Gospel?</label>
                 <div class="number-input-control">
                   <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease heard the Gospel count">&#8592;</button>
-                  <input type="number" id="heard-gospel-count" min="0" step="1" value="1">
+                  <input type="number" id="heard-gospel-count" min="1" step="1" value="1">
                   <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase heard the Gospel count">&#8594;</button>
                 </div>
               </div>
@@ -132,7 +132,7 @@
                 <label for="professed-count">How many professed?</label>
                 <div class="number-input-control">
                   <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease professed count">&#8592;</button>
-                  <input type="number" id="professed-count" min="0" step="1" value="1">
+                  <input type="number" id="professed-count" min="1" step="1" value="1">
                   <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase professed count">&#8594;</button>
                 </div>
               </div>
@@ -508,7 +508,7 @@
             <label for="edit-heard-gospel-count">How many heard the Gospel?</label>
             <div class="number-input-control">
               <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease heard the Gospel count">&#8592;</button>
-              <input type="number" id="edit-heard-gospel-count" min="0" step="1" value="1">
+              <input type="number" id="edit-heard-gospel-count" min="1" step="1" value="1">
               <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase heard the Gospel count">&#8594;</button>
             </div>
           </div>
@@ -516,7 +516,7 @@
             <label for="edit-professed-count">How many professed?</label>
             <div class="number-input-control">
               <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease professed count">&#8592;</button>
-              <input type="number" id="edit-professed-count" min="0" step="1" value="1">
+              <input type="number" id="edit-professed-count" min="1" step="1" value="1">
               <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase professed count">&#8594;</button>
             </div>
           </div>
@@ -693,7 +693,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=8"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
