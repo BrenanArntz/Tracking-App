@@ -235,6 +235,7 @@ input[type="password"],
 input[type="date"],
 input[type="datetime-local"],
 input[type="url"],
+input[type="number"],
 select,
 textarea {
   width: 100%;
@@ -245,6 +246,16 @@ textarea {
   padding: 12px 14px;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+input[type="number"] {
+  color-scheme: dark;
+  appearance: auto;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
 }
 
 input::placeholder,
