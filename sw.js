@@ -1,7 +1,7 @@
 ﻿// Evangelism Tracker - Service Worker
 // Keep this simple during local development so stale app code does not
 // stick around and break the UI on repeated testing.
-const CACHE_NAME = 'evangelism-tracker-v6';
+const CACHE_NAME = 'evangelism-tracker-v7';
 const STATIC_ASSETS = [
   '',
   'index.html',

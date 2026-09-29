@@ -1117,6 +1117,22 @@ function renderEvangelistCheckboxes(container = document.getElementById('evangel
 }
 
 // --- LOG CREATION & RENDER ---
+document.addEventListener('click', (event) => {
+  const stepper = event.target.closest('.number-stepper');
+  if (!stepper) return;
+
+  const input = stepper.parentElement.querySelector('input[type="number"]');
+  if (!input) return;
+
+  const min = input.min === '' ? Number.NEGATIVE_INFINITY : Number(input.min);
+  const max = input.max === '' ? Number.POSITIVE_INFINITY : Number(input.max);
+  const currentValue = input.value === '' ? 0 : Number(input.value);
+  const nextValue = currentValue + Number(stepper.dataset.numberStep) * Number(input.step || 1);
+  input.value = String(Math.max(min, Math.min(max, nextValue)));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+});
+
 document.getElementById('tracker-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 

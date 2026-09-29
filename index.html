@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Evangelism Tracker">
   <link rel="apple-touch-icon" href="icons/trackerlogo.png">
   
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -121,12 +121,20 @@
 
               <div class="form-group conditional-counter" id="heard-gospel-row" style="display: none;">
                 <label for="heard-gospel-count">How many heard the Gospel?</label>
-                <input type="number" id="heard-gospel-count" min="0" step="1" value="1">
+                <div class="number-input-control">
+                  <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease heard the Gospel count">&#8592;</button>
+                  <input type="number" id="heard-gospel-count" min="0" step="1" value="1">
+                  <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase heard the Gospel count">&#8594;</button>
+                </div>
               </div>
 
               <div class="form-group conditional-counter" id="professed-row" style="display: none;">
                 <label for="professed-count">How many professed?</label>
-                <input type="number" id="professed-count" min="0" step="1" value="1">
+                <div class="number-input-control">
+                  <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease professed count">&#8592;</button>
+                  <input type="number" id="professed-count" min="0" step="1" value="1">
+                  <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase professed count">&#8594;</button>
+                </div>
               </div>
 
               <div class="form-group">
@@ -498,11 +506,19 @@
           </div>
           <div class="form-group conditional-counter" id="edit-heard-gospel-row" style="display: none;">
             <label for="edit-heard-gospel-count">How many heard the Gospel?</label>
-            <input type="number" id="edit-heard-gospel-count" min="0" step="1" value="1">
+            <div class="number-input-control">
+              <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease heard the Gospel count">&#8592;</button>
+              <input type="number" id="edit-heard-gospel-count" min="0" step="1" value="1">
+              <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase heard the Gospel count">&#8594;</button>
+            </div>
           </div>
           <div class="form-group conditional-counter" id="edit-professed-row" style="display: none;">
             <label for="edit-professed-count">How many professed?</label>
-            <input type="number" id="edit-professed-count" min="0" step="1" value="1">
+            <div class="number-input-control">
+              <button type="button" class="number-stepper" data-number-step="-1" aria-label="Decrease professed count">&#8592;</button>
+              <input type="number" id="edit-professed-count" min="0" step="1" value="1">
+              <button type="button" class="number-stepper" data-number-step="1" aria-label="Increase professed count">&#8594;</button>
+            </div>
           </div>
           <div class="form-group">
             <label for="edit-chat-photo">Replace Photo (Optional)</label>
