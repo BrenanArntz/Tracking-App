@@ -1068,10 +1068,55 @@ function autofillChatLocation(isEdit = false) {
   if (eventName) locationInput.value = eventName;
 }
 
-function renderChatLocationSuggestions(logs) {
-  const datalist = document.getElementById('chat-location-suggestions');
-  if (!datalist) return;
+let chatLocationSuggestions = [];
 
+function closeChatLocationSuggestions(input) {
+  const list = document.getElementById(input.dataset.suggestions);
+  if (!list) return;
+
+  list.hidden = true;
+  list.classList.remove('is-open');
+  input.setAttribute('aria-expanded', 'false');
+  input.removeAttribute('aria-activedescendant');
+  input.dataset.activeIndex = '-1';
+}
+
+function showChatLocationSuggestions(input) {
+  const list = document.getElementById(input.dataset.suggestions);
+  if (!list) return;
+
+  const query = input.value.trim().toLowerCase();
+  if (!query) {
+    closeChatLocationSuggestions(input);
+    return;
+  }
+
+  const matches = chatLocationSuggestions
+    .filter(location => location.toLowerCase().includes(query))
+    .slice(0, 8);
+
+  const options = matches.map((location, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'location-suggestion';
+    option.id = `${list.id}-option-${index}`;
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
+    option.dataset.location = location;
+    option.textContent = location;
+    return option;
+  });
+  list.replaceChildren(...options);
+
+  const hasMatches = matches.length > 0;
+  list.hidden = !hasMatches;
+  list.classList.toggle('is-open', hasMatches);
+  input.setAttribute('aria-expanded', String(hasMatches));
+  input.removeAttribute('aria-activedescendant');
+  input.dataset.activeIndex = '-1';
+}
+
+function renderChatLocationSuggestions(logs) {
   const locations = new Map();
   logs.forEach(log => {
     const location = String(log.location || '').trim();
@@ -1079,15 +1124,73 @@ function renderChatLocationSuggestions(logs) {
     if (location && !locations.has(key)) locations.set(key, location);
   });
 
-  const options = Array.from(locations.values())
-    .sort((first, second) => first.localeCompare(second))
-    .map(location => {
-      const option = document.createElement('option');
-      option.value = location;
-      return option;
-    });
-  datalist.replaceChildren(...options);
+  chatLocationSuggestions = Array.from(locations.values())
+    .sort((first, second) => first.localeCompare(second));
+  document.querySelectorAll('.chat-location-input').forEach(input => {
+    const list = document.getElementById(input.dataset.suggestions);
+    if (document.activeElement === input && list && !list.hidden) {
+      showChatLocationSuggestions(input);
+    }
+  });
 }
+
+document.addEventListener('input', event => {
+  const input = event.target.closest('.chat-location-input');
+  if (input) showChatLocationSuggestions(input);
+});
+
+document.addEventListener('keydown', event => {
+  const input = event.target.closest('.chat-location-input');
+  if (!input) return;
+
+  const list = document.getElementById(input.dataset.suggestions);
+  if (!list) return;
+  const options = Array.from(list.querySelectorAll('.location-suggestion'));
+
+  if (event.key === 'Escape') {
+    closeChatLocationSuggestions(input);
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (!options.length) return;
+
+    event.preventDefault();
+    const previousIndex = Number(input.dataset.activeIndex || -1);
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    const nextIndex = (previousIndex + direction + options.length) % options.length;
+    input.dataset.activeIndex = String(nextIndex);
+    options.forEach((option, index) => {
+      const isActive = index === nextIndex;
+      option.setAttribute('aria-selected', String(isActive));
+      option.classList.toggle('is-active', isActive);
+    });
+    input.setAttribute('aria-activedescendant', options[nextIndex].id);
+    options[nextIndex].scrollIntoView({ block: 'nearest' });
+  } else if (event.key === 'Enter' && !list.hidden) {
+    const activeIndex = Number(input.dataset.activeIndex || -1);
+    if (activeIndex >= 0 && options[activeIndex]) {
+      event.preventDefault();
+      input.value = options[activeIndex].dataset.location;
+      closeChatLocationSuggestions(input);
+    }
+  }
+});
+
+document.addEventListener('click', event => {
+  const suggestion = event.target.closest('.location-suggestion');
+  if (suggestion) {
+    const wrapper = suggestion.closest('.location-autocomplete');
+    const input = wrapper && wrapper.querySelector('.chat-location-input');
+    if (input) {
+      input.value = suggestion.dataset.location;
+      input.focus();
+      closeChatLocationSuggestions(input);
+    }
+    return;
+  }
+
+  if (!event.target.closest('.location-autocomplete')) {
+    document.querySelectorAll('.chat-location-input').forEach(closeChatLocationSuggestions);
+  }
+});
 
 document.getElementById('chat-date').addEventListener('change', () => autofillChatLocation());
 document.getElementById('edit-chat-date').addEventListener('change', () => autofillChatLocation(true));
