@@ -94,7 +94,8 @@
 
               <div class="form-group">
                 <label for="chat-location">Location</label>
-                <input type="text" id="chat-location" placeholder="Event name or location">
+                <input type="text" id="chat-location" list="chat-location-suggestions" placeholder="Event name or location">
+                <datalist id="chat-location-suggestions"></datalist>
               </div>
 
               <div class="form-group">
@@ -482,7 +483,7 @@
           </div>
           <div class="form-group">
             <label for="edit-chat-location">Location</label>
-            <input type="text" id="edit-chat-location" placeholder="Event name or location">
+            <input type="text" id="edit-chat-location" list="chat-location-suggestions" placeholder="Event name or location">
           </div>
           <div class="form-group">
             <label>Participating Evangelists</label>

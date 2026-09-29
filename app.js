@@ -1068,6 +1068,27 @@ function autofillChatLocation(isEdit = false) {
   if (eventName) locationInput.value = eventName;
 }
 
+function renderChatLocationSuggestions(logs) {
+  const datalist = document.getElementById('chat-location-suggestions');
+  if (!datalist) return;
+
+  const locations = new Map();
+  logs.forEach(log => {
+    const location = String(log.location || '').trim();
+    const key = location.toLowerCase();
+    if (location && !locations.has(key)) locations.set(key, location);
+  });
+
+  const options = Array.from(locations.values())
+    .sort((first, second) => first.localeCompare(second))
+    .map(location => {
+      const option = document.createElement('option');
+      option.value = location;
+      return option;
+    });
+  datalist.replaceChildren(...options);
+}
+
 document.getElementById('chat-date').addEventListener('change', () => autofillChatLocation());
 document.getElementById('edit-chat-date').addEventListener('change', () => autofillChatLocation(true));
 document.getElementById('show-additional-evangelists').addEventListener('click', () => {
@@ -1261,6 +1282,7 @@ async function renderLogs() {
     ? l.groupName === targetGroup
     : l.groupName === currentUser.groupName);
 
+  renderChatLocationSuggestions(relevantLogs);
   updateLogFilterOptions(relevantLogs);
 
   const searchTerm = logViewState.search.trim().toLowerCase();
