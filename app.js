@@ -3427,23 +3427,30 @@ function showPasswordSetupModal() {
   if (setModal) setModal.classList.add('active');
 }
 
-function checkPasswordSetupRedirect() {
+function getPasswordSetupLinkType() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const queryType = new URLSearchParams(window.location.search).get('type');
-  const linkType = (hashParams.get('type') || queryType || '').toLowerCase();
-  if (['recovery', 'signup', 'invite'].includes(linkType)) {
+  const searchParams = new URLSearchParams(window.location.search);
+  return (hashParams.get('type') || searchParams.get('type') || '').toLowerCase();
+}
+
+function hasPasswordSetupLink() {
+  return ['recovery', 'signup', 'invite'].includes(getPasswordSetupLinkType())
+    || new URLSearchParams(window.location.search).has('code');
+}
+
+function checkPasswordSetupRedirect() {
+  if (['recovery', 'signup', 'invite'].includes(getPasswordSetupLinkType())) {
     showPasswordSetupModal();
   }
 }
 
 checkPasswordSetupRedirect();
 
+const isPasswordSetupRedirect = hasPasswordSetupLink();
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    const linkType = (hashParams.get('type') || '').toLowerCase();
-    if (session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && ['signup', 'invite'].includes(linkType)))) {
+    if (session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isPasswordSetupRedirect))) {
       showPasswordSetupModal();
     }
   });
