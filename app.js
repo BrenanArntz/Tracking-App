@@ -2367,7 +2367,24 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   }
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-  const currentGroupId = await getEffectiveGroupIdAsync();
+  let currentGroupId = currentUser.role !== 'super_admin' && currentUser.groupId
+    ? currentUser.groupId
+    : null;
+  if (supabase && !currentGroupId) {
+    const { data: currentGroups, error: groupLookupError } = await supabase
+      .from('groups')
+      .select('id')
+      .eq('name', oldName)
+      .limit(1);
+    if (groupLookupError) {
+      console.warn('Current group lookup failed:', groupLookupError.message);
+      alert('Unable to find this group. No changes were made.');
+      return;
+    }
+    currentGroupId = currentGroups && currentGroups.length ? currentGroups[0].id : null;
+  }
+  if (!currentGroupId) currentGroupId = await getEffectiveGroupIdAsync();
+
   if (newName !== oldName) {
     let duplicateGroupExists = false;
     if (supabase) {
@@ -2394,13 +2411,16 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
     if (['director', 'super_admin'].includes(currentUser.role)) {
       groupUpdate.timezone = newTimezone;
     }
-    const { error } = await supabase
+    const { data: updatedGroup, error } = await supabase
       .from('groups')
       .update(groupUpdate)
-      .eq('id', groupId);
+      .eq('id', groupId)
+      .select('id')
+      .maybeSingle();
 
-    if (error) {
-      console.warn('Team rename failed:', error.message);
+    if (error || !updatedGroup) {
+      if (error) console.warn('Team rename failed:', error.message);
+      else console.warn('Team rename matched no group:', groupId);
       alert('Unable to change the team name. It may already be in use.');
       return;
     }
@@ -2414,11 +2434,9 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   });
 
   const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
-  if (cachedGroupIds[oldName]) {
-    cachedGroupIds[newName] = cachedGroupIds[oldName];
-    delete cachedGroupIds[oldName];
-    localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
-  }
+  cachedGroupIds[newName] = currentGroupId;
+  delete cachedGroupIds[oldName];
+  localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
   if (currentUser.role === 'director') currentUser.groupName = newName;
   activeGroupName = newName;
