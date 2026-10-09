@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Evangelism Tracker">
   <link rel="apple-touch-icon" href="icons/trackerlogo.png">
   
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
@@ -36,7 +36,16 @@
           
           <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" id="password" placeholder="Password">
+            <div class="password-input-control">
+              <input type="password" id="password" placeholder="Password">
+              <button type="button" class="password-visibility-toggle" data-password-target="password" aria-label="Show password" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path class="password-hidden-icon" d="m4 4 16 16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <label class="checkbox-label" for="stay-signed-in">
@@ -684,11 +693,29 @@
         <form id="set-password-form">
           <div class="form-group">
             <label for="new-password">New Password</label>
-            <input type="password" id="new-password" placeholder="Enter new password" required minlength="6">
+            <div class="password-input-control">
+              <input type="password" id="new-password" placeholder="Enter new password" required minlength="6">
+              <button type="button" class="password-visibility-toggle" data-password-target="new-password" aria-label="Show password" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path class="password-hidden-icon" d="m4 4 16 16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label for="confirm-new-password">Confirm Password</label>
-            <input type="password" id="confirm-new-password" placeholder="Confirm new password" required minlength="6">
+            <div class="password-input-control">
+              <input type="password" id="confirm-new-password" placeholder="Confirm new password" required minlength="6">
+              <button type="button" class="password-visibility-toggle" data-password-target="confirm-new-password" aria-label="Show password" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path class="password-hidden-icon" d="m4 4 16 16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
           <button type="submit" class="btn primary">Save Password & Continue</button>
         </form>
@@ -699,7 +726,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=11"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

@@ -3447,14 +3447,27 @@ function checkPasswordSetupRedirect() {
 checkPasswordSetupRedirect();
 
 const isPasswordSetupRedirect = hasPasswordSetupLink();
+let passwordSetupCompleted = false;
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    if (session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isPasswordSetupRedirect))) {
+    if (!passwordSetupCompleted && session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isPasswordSetupRedirect))) {
       showPasswordSetupModal();
     }
   });
 }
+
+document.querySelectorAll('.password-visibility-toggle').forEach((toggle) => {
+  toggle.addEventListener('click', () => {
+    const passwordInput = document.getElementById(toggle.dataset.passwordTarget);
+    if (!passwordInput) return;
+
+    const isVisible = passwordInput.type === 'text';
+    passwordInput.type = isVisible ? 'password' : 'text';
+    toggle.setAttribute('aria-pressed', String(!isVisible));
+    toggle.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
+  });
+});
 
 document.getElementById('set-password-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -3478,6 +3491,11 @@ document.getElementById('set-password-form').addEventListener('submit', async (e
     return;
   }
 
+  passwordSetupCompleted = true;
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, null, window.location.pathname);
+  }
+
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
   if (supabase) {
     try {
@@ -3495,10 +3513,6 @@ document.getElementById('set-password-form').addEventListener('submit', async (e
 
   document.getElementById('set-password-modal').classList.remove('active');
   alert('Your password has been set successfully!');
-
-  if (window.history && window.history.replaceState) {
-    window.history.replaceState(null, null, window.location.pathname);
-  }
 
   await restoreSavedSession();
 });

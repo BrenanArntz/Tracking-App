@@ -262,6 +262,54 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 
+.password-input-control {
+  position: relative;
+}
+
+.password-input-control input {
+  padding-right: 48px;
+}
+
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.password-visibility-toggle:hover {
+  color: var(--text);
+}
+
+.password-visibility-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.password-visibility-toggle svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.password-visibility-toggle[aria-pressed="true"] .password-hidden-icon {
+  display: none;
+}
+
 .number-input-control {
   position: relative;
 }
@@ -1198,4 +1246,3 @@ textarea {
 .btn-load-more:active {
   transform: scale(0.98);
 }
-
