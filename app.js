@@ -2344,17 +2344,6 @@ window.deleteResource = async function(id) {
 };
 
 // --- TEAM MANAGEMENT (DIRECTOR & ADMIN LEVEL) ---
-let settingsSavedPopupTimeout;
-
-function showSettingsSavedPopup() {
-  const popup = document.getElementById('settings-saved-popup');
-  popup.classList.add('visible');
-  clearTimeout(settingsSavedPopupTimeout);
-  settingsSavedPopupTimeout = setTimeout(() => {
-    popup.classList.remove('visible');
-  }, 3500);
-}
-
 document.getElementById('rename-team-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -2464,7 +2453,7 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   await renderLogs();
   await renderCalendar();
   await renderResources();
-  showSettingsSavedPopup();
+  alert(`Group settings updated successfully for "${newName}".`);
 });
 
 document.getElementById('add-member-form').addEventListener('submit', async (e) => {
