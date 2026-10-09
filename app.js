@@ -3451,7 +3451,8 @@ let passwordSetupCompleted = false;
 const supabaseAuthCheck = window.getSupabaseClient ? window.getSupabaseClient() : null;
 if (supabaseAuthCheck) {
   supabaseAuthCheck.auth.onAuthStateChange(async (event, session) => {
-    if (!passwordSetupCompleted && session && (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && isPasswordSetupRedirect))) {
+    if (!passwordSetupCompleted && isPasswordSetupRedirect && session
+      && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN')) {
       showPasswordSetupModal();
     }
   });
