@@ -1133,6 +1133,32 @@ textarea {
   color: var(--muted);
 }
 
+.settings-saved-popup {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 110;
+  max-width: calc(100vw - 32px);
+  padding: 14px 20px;
+  border: 1px solid rgba(52, 211, 153, 0.55);
+  border-radius: 12px;
+  background: rgba(6, 45, 38, 0.97);
+  box-shadow: 0 12px 30px var(--shadow);
+  color: #d1fae5;
+  font-weight: 600;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -12px);
+  transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+}
+
+.settings-saved-popup.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
 @media (max-width: 480px) {
   .app-container {
     padding-left: 12px;
@@ -1168,6 +1194,12 @@ textarea {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .settings-saved-popup {
+    transition: none;
+  }
+}
+
 /* Load More Chats Styling */
 .log-load-more-container {
   display: flex;
@@ -1198,4 +1230,3 @@ textarea {
 .btn-load-more:active {
   transform: scale(0.98);
 }
-
