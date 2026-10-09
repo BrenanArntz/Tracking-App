@@ -734,10 +734,11 @@ async function setActiveGroupContext(groupName) {
   await refreshChatDateDefault(true);
   switchTab('tab-tracker');
   renderEvangelistCheckboxes();
-  await renderLogs();
+  const dashboardLogs = await loadChatLogsFromSupabase();
+  await renderLogs(true);
   await renderCalendar();
   await renderResources();
-  await renderTeam();
+  await renderTeam(dashboardLogs);
   renderSuperAdminPanel();
 }
 
@@ -1368,11 +1369,13 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   await renderLogs();
 });
 
-async function renderLogs() {
+async function renderLogs(useCachedLogs = false) {
   if (!ensureUserSession()) return;
 
   const renderVersion = ++logRenderVersion;
-  const logs = await loadChatLogsFromSupabase();
+  const logs = useCachedLogs
+    ? getStoredArray('evangelism_logs')
+    : await loadChatLogsFromSupabase();
   if (renderVersion !== logRenderVersion) return;
 
   const logList = document.getElementById('log-list');
@@ -1589,15 +1592,16 @@ function updateLogFilterOptions(logs) {
 ['log-search', 'log-progress-filter', 'log-evangelist-filter', 'log-sort'].forEach(id => {
   const control = document.getElementById(id);
   if (!control) return;
-  control.addEventListener('input', () => {
+  const updateLogView = () => {
     if (id === 'log-search') logViewState.search = control.value;
     if (id === 'log-progress-filter') logViewState.progress = control.value;
     if (id === 'log-evangelist-filter') logViewState.evangelist = control.value;
     if (id === 'log-sort') logViewState.sort = control.value;
     logViewState.limit = 20;
-    renderLogs();
-  });
-  control.addEventListener('change', () => control.dispatchEvent(new Event('input')));
+    renderLogs(true);
+  };
+
+  control.addEventListener(id === 'log-search' ? 'input' : 'change', updateLogView);
 });
 
 // Log Edit/Delete Modals
@@ -2747,11 +2751,11 @@ window.deleteTeamPhoto = async function(photoId) {
   await renderTeamPhotos();
 };
 
-async function renderTeam() {
+async function renderTeam(logs = null) {
   if (!ensureUserSession()) return;
 
   const team = await loadTeamDataFromSupabase();
-  await renderTeamStats();
+  await renderTeamStats(logs);
   await renderTeamPhotos();
   const teamList = document.getElementById('team-list');
   teamList.innerHTML = '';
@@ -2783,11 +2787,11 @@ async function renderTeam() {
   });
 }
 
-async function renderTeamStats() {
-  const logs = await loadChatLogsFromSupabase();
+async function renderTeamStats(logs = null) {
+  const chatLogs = logs || await loadChatLogsFromSupabase();
   const groupTimezone = await getEffectiveGroupTimezone();
   const targetGroup = getEffectiveGroupName();
-  const groupLogs = logs.filter(log => currentUser.role === 'super_admin'
+  const groupLogs = chatLogs.filter(log => currentUser.role === 'super_admin'
     ? log.groupName === targetGroup
     : log.groupName === currentUser.groupName);
   const relevantLogs = groupLogs.filter(log => isLogInStatsRange(log.date, groupTimezone));
