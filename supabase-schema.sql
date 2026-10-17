@@ -349,3 +349,40 @@ CREATE POLICY "Authenticated upload for chat_photos" ON storage.objects
 
 -- You can add initial users and sample logs after you create your Supabase project and auth setup.
 
+DROP FUNCTION IF EXISTS public.admin_user_login_status();
+DROP FUNCTION IF EXISTS public.admin_user_setup_status();
+
+CREATE FUNCTION public.admin_user_setup_status()
+RETURNS TABLE(user_id TEXT, account_is_setup BOOLEAN)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+STABLE
+AS $$
+BEGIN
+  IF COALESCE(public.current_profile_role(), '') NOT IN ('super_admin', 'director', 'admin') THEN
+    RAISE EXCEPTION 'Only system admins, directors, and admins can view account setup status.';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    app_user.id,
+    auth_user.last_sign_in_at IS NOT NULL
+      AND DATE_TRUNC('second', auth_user.last_sign_in_at)
+        <> DATE_TRUNC('second', auth_user.created_at)
+  FROM public.users AS app_user
+  LEFT JOIN LATERAL (
+    SELECT account.last_sign_in_at, account.created_at
+    FROM auth.users AS account
+    WHERE account.id::TEXT = app_user.auth_user_id
+      OR LOWER(account.email) = LOWER(app_user.email)
+    ORDER BY (account.id::TEXT = app_user.auth_user_id) DESC
+    LIMIT 1
+  ) AS auth_user ON TRUE
+  WHERE public.is_super_admin()
+     OR app_user.group_id = public.current_profile_group_id();
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_user_setup_status() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_user_setup_status() TO authenticated;

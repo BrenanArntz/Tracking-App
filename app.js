@@ -2862,7 +2862,20 @@ async function renderTeam(logs = null) {
   await renderTeamStats(logs);
   await renderTeamPhotos();
   const teamList = document.getElementById('team-list');
+  const loginStatusWarning = document.getElementById('team-login-status-warning');
   teamList.innerHTML = '';
+  loginStatusWarning.hidden = true;
+
+  let loginStatuses = null;
+  if (['super_admin', 'director', 'admin'].includes(currentUser.role)) {
+    try {
+      loginStatuses = await loadAdminAccountSetupStatuses();
+    } catch (error) {
+      console.warn('Unable to load account setup status:', error);
+      loginStatusWarning.textContent = 'Account setup status is unavailable. Run the updated supabase-schema.sql in the Supabase SQL editor.';
+      loginStatusWarning.hidden = false;
+    }
+  }
 
   const targetGroup = getEffectiveGroupName();
   const groupMembers = team.filter(m => currentUser.role === 'super_admin'
@@ -2873,9 +2886,13 @@ async function renderTeam(logs = null) {
     const canEdit = canManageUser(m);
     const li = document.createElement('li');
     li.className = 'log-item';
+    const isAccountSetup = loginStatuses && loginStatuses.get(String(m.id));
+    const setupLabel = isAccountSetup === false
+      ? '<span class="login-setup-badge">Account Not Setup</span>'
+      : '';
     li.innerHTML = `
       <div class="log-item-header">
-        <span class="log-item-title">${escapeHtml(m.name)}</span>
+        <span class="log-item-title">${escapeHtml(m.name)}${setupLabel}</span>
         <span class="badge">${escapeHtml(m.role)}</span>
       </div>
       <p class="log-item-notes">${escapeHtml(m.email)} | Group: ${escapeHtml(m.groupName)}</p>
@@ -2889,6 +2906,19 @@ async function renderTeam(logs = null) {
     `;
     teamList.appendChild(li);
   });
+}
+
+async function loadAdminAccountSetupStatuses() {
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (!supabase) throw new Error('Supabase is not available.');
+
+  const { data, error } = await supabase.rpc('admin_user_setup_status');
+  if (error) throw new Error(error.message);
+
+  return new Map((data || []).map(status => [
+    String(status.user_id),
+    Boolean(status.account_is_setup)
+  ]));
 }
 
 async function renderTeamStats(logs = null) {
@@ -3185,7 +3215,18 @@ async function renderSuperAdminPanel() {
   const team = await loadTeamDataFromSupabase();
   const allGroupNames = await loadAllGroupsFromSupabase();
   const directorList = document.getElementById('director-list');
+  const loginStatusWarning = document.getElementById('admin-login-status-warning');
   directorList.innerHTML = '';
+  loginStatusWarning.hidden = true;
+
+  let loginStatuses = null;
+  try {
+    loginStatuses = await loadAdminAccountSetupStatuses();
+  } catch (error) {
+    console.warn('Unable to load account setup status:', error);
+    loginStatusWarning.textContent = 'Account setup status is unavailable. Run the updated supabase-schema.sql in the Supabase SQL editor.';
+    loginStatusWarning.hidden = false;
+  }
 
   if (allGroupNames.length === 0) {
     directorList.innerHTML = '<li class="empty-state">No groups created yet.</li>';
@@ -3207,8 +3248,12 @@ async function renderSuperAdminPanel() {
 
     if (director) {
       const roleLabel = director.role === 'super_admin' ? 'System Admin & Director' : 'Director';
+      const isAccountSetup = loginStatuses && loginStatuses.get(String(director.id));
+      const setupLabel = isAccountSetup === false
+        ? '<span class="login-setup-badge">Account Not Setup</span>'
+        : '';
       headerDiv.innerHTML = `
-        <span class="log-item-title">${escapeHtml(director.name)} (${roleLabel})</span>
+        <span class="log-item-title">${escapeHtml(director.name)} (${roleLabel})${setupLabel}</span>
         <span class="badge group-tag">${escapeHtml(groupName)}</span>
       `;
     } else {

@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Evangelism Tracker">
   <link rel="apple-touch-icon" href="icons/trackerlogo.png">
   
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -414,6 +414,7 @@
 
           <div class="card">
             <h3>Local Group Roster</h3>
+            <p id="team-login-status-warning" class="login-status-warning" hidden></p>
             <ul id="team-list" class="log-list">
               <li class="empty-state">No team members listed yet.</li>
             </ul>
@@ -447,6 +448,7 @@
 
           <div class="card">
             <h3>All Local Groups & Directors</h3>
+            <p id="admin-login-status-warning" class="login-status-warning" hidden></p>
             <ul id="director-list" class="log-list">
               <li class="empty-state">No directors assigned yet.</li>
             </ul>
@@ -733,7 +735,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=17"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

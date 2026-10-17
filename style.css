@@ -999,6 +999,27 @@ textarea {
   color: #ffd9a3;
 }
 
+.login-setup-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 4px 8px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.login-status-warning {
+  margin: 0 0 12px;
+  color: var(--warning);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .log-actions {
   display: flex;
   flex-wrap: wrap;

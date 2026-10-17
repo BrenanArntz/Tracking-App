@@ -14,6 +14,8 @@ This app tracks outreach conversations, local groups, events, and shared resourc
 2. Add your project URL and anon key to `supabase.js`.
 3. Run the SQL in `supabase-schema.sql` in the Supabase SQL editor.
 
+For existing projects, run the updated `supabase-schema.sql` in the SQL editor to enable role-restricted account setup status in team rosters. Accounts whose last sign-in and creation match to the second are marked as not set up.
+
 To enable removal of a user's Supabase Auth account along with their profile, deploy the Edge Function:
 
 ```bash
