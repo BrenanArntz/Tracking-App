@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Evangelism Tracker">
   <link rel="apple-touch-icon" href="icons/trackerlogo.png">
   
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
@@ -88,6 +88,13 @@
 
         <!-- TAB 1: CHAT LOG -->
         <div id="tab-tracker" class="tab-content active">
+          <div class="install-app-panel">
+            <button type="button" id="install-app-button" class="btn primary" hidden>Install as app</button>
+            <div id="install-app-instructions" class="install-app-instructions" role="status" aria-live="polite" hidden>
+              <p id="install-app-instructions-text"></p>
+              <button type="button" id="dismiss-install-app-instructions" class="btn-text small">Dismiss</button>
+            </div>
+          </div>
           <div class="card">
             <h3>Log New Conversation</h3>
             <form id="tracker-form">
@@ -726,7 +733,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

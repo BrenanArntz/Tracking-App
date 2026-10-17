@@ -104,6 +104,91 @@ const logViewState = {
 };
 let logRenderVersion = 0;
 
+const installAppButton = document.getElementById('install-app-button');
+const installAppInstructions = document.getElementById('install-app-instructions');
+const installAppInstructionsText = document.getElementById('install-app-instructions-text');
+let deferredInstallPrompt = null;
+
+function isRunningAsInstalledApp() {
+  const standaloneMode = window.matchMedia
+    && (window.matchMedia('(display-mode: standalone)').matches
+      || window.matchMedia('(display-mode: fullscreen)').matches);
+  return Boolean(standaloneMode || navigator.standalone === true);
+}
+
+function updateInstallAppButton() {
+  if (installAppButton) installAppButton.hidden = isRunningAsInstalledApp();
+  if (isRunningAsInstalledApp() && installAppInstructions) installAppInstructions.hidden = true;
+}
+
+function showInstallAppInstructions() {
+  if (!installAppInstructions || !installAppInstructionsText) return;
+
+  const userAgent = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/i.test(userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(userAgent);
+
+  if (isIOS) {
+    installAppInstructionsText.textContent = 'To install, tap your browser’s Share button, then choose “Add to Home Screen.” In Chrome, open the Share menu first.';
+  } else if (isAndroid) {
+    installAppInstructionsText.textContent = 'Open your browser menu (⋮), then choose “Install app” or “Add to Home screen” and confirm.';
+  } else {
+    installAppInstructionsText.textContent = 'Use your browser’s install icon in the address bar, or open its menu and choose “Install app” or “Install this site as an app.”';
+  }
+
+  installAppInstructions.hidden = false;
+}
+
+updateInstallAppButton();
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updateInstallAppButton();
+});
+
+if (installAppButton) {
+  installAppButton.addEventListener('click', async () => {
+    if (isRunningAsInstalledApp()) {
+      updateInstallAppButton();
+      return;
+    }
+
+    if (!deferredInstallPrompt) {
+      showInstallAppInstructions();
+      return;
+    }
+
+    const installPrompt = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        installAppButton.hidden = true;
+      } else {
+        showInstallAppInstructions();
+      }
+    } catch (error) {
+      console.warn('App installation prompt failed:', error);
+      showInstallAppInstructions();
+    }
+  });
+}
+
+const dismissInstallAppInstructionsButton = document.getElementById('dismiss-install-app-instructions');
+if (dismissInstallAppInstructionsButton && installAppInstructions) {
+  dismissInstallAppInstructionsButton.addEventListener('click', () => {
+    installAppInstructions.hidden = true;
+  });
+}
+
 function getStoredArray(key) {
   try {
     const value = localStorage.getItem(key);

@@ -185,10 +185,37 @@ button, input, select, textarea {
   background: linear-gradient(180deg, var(--primary), var(--primary-strong));
 }
 
+.install-app-panel {
+  margin-bottom: 18px;
+}
+
+.install-app-instructions {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+}
+
+.install-app-instructions p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.install-app-instructions .btn-text {
+  margin: 8px 0 0 -10px;
+}
+
 .btn-text {
   background: transparent;
   color: var(--text);
   padding: 8px 10px;
+}
+
+.install-app-instructions[hidden],
+#install-app-button[hidden] {
+  display: none;
 }
 
 .form-group {
