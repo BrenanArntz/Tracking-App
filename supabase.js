@@ -80,11 +80,11 @@ async function signInUser(email, password) {
   return { ok: true, data };
 }
 
-async function signOutUser() {
+async function signOutUser(scope = 'global') {
   const supabase = getSupabaseClient();
   if (!supabase) return { ok: false, message: 'Supabase is not configured.' };
 
-  const { error } = await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut({ scope });
 
   if (error) {
     return { ok: false, message: error.message };

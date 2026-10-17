@@ -860,7 +860,7 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 async function restoreSavedSession() {
-  if (localStorage.getItem(STAY_SIGNED_IN_KEY) !== 'true') return;
+  if (hasPasswordSetupLink() || localStorage.getItem(STAY_SIGNED_IN_KEY) !== 'true') return;
 
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
   if (!supabase || !window.getCurrentAuthUser) return;
@@ -3512,8 +3512,21 @@ document.getElementById('set-password-form').addEventListener('submit', async (e
     }
   }
 
-  document.getElementById('set-password-modal').classList.remove('active');
-  alert('Your password has been set successfully!');
+  try {
+    const signOutResult = await window.signOutUser('local');
+    if (!signOutResult.ok) {
+      alert(`Password was saved, but automatic sign-out failed: ${signOutResult.message}. Please close this page and sign in again.`);
+      return;
+    }
+  } catch (error) {
+    alert(`Password was saved, but automatic sign-out failed: ${error.message}. Please close this page and sign in again.`);
+    return;
+  }
 
-  await restoreSavedSession();
+  localStorage.removeItem(STAY_SIGNED_IN_KEY);
+  currentUser = null;
+  dashboardScreen.classList.remove('active');
+  authScreen.classList.add('active');
+  document.getElementById('set-password-modal').classList.remove('active');
+  alert('Your password has been saved. Please sign in with your new password.');
 });
