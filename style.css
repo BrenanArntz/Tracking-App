@@ -905,6 +905,7 @@ textarea {
 .witnesses-today-card {
   padding: 0;
   overflow: hidden;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.92));
 }
 
 .witnesses-today-header {
@@ -913,6 +914,7 @@ textarea {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
+  background: transparent;
 }
 
 .witnesses-today-title-group {
@@ -927,14 +929,15 @@ textarea {
 }
 
 .witnesses-today-toggle {
+  appearance: none;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   border: 0;
   padding: 6px 2px;
-  background: transparent;
-  color: #ffffff;
+  background: none;
+  color: var(--text);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
@@ -968,22 +971,28 @@ textarea {
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.65);
 }
 
 .witnesses-today-filter {
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 8px;
-  padding: 6px 9px;
-  background: rgba(148, 163, 184, 0.09);
-  color: var(--text);
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .witnesses-today-filter[aria-pressed="true"] {
-  border-color: rgba(249, 115, 22, 0.55);
-  background: rgba(249, 115, 22, 0.16);
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.16);
   color: #ffffff;
 }
 
