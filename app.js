@@ -1,14 +1,6 @@
 // Convert a Date or ISO string to the format a datetime-local input expects
 // (YYYY-MM-DDTHH:mm in local time). Avoids the value being cleared by the
 // browser when given an ISO string with a timezone suffix.
-const APP_UPDATE_VERSION = '2026.10.22.1';
-const APP_UPDATE_MESSAGE = `- "Who's Been Witnessing" Log
-- Our Team / All Teams filters
-- Expandable chats with chat details
-- Group country information
-- Team Log loads when opened
-- Location suggestions while logging a conversation`;
-
 function toLocalDateTimeInput(value) {
   if (value === null || value === undefined || value === '') return '';
 
@@ -953,9 +945,7 @@ loginForm.addEventListener('submit', async (e) => {
       email: userRecord.email,
       role: userRecord.role,
       groupId: userRecord.group_id,
-      groupName: userRecord.groups ? userRecord.groups.name : null,
-      accountCreatedAt: authUser.created_at,
-      lastSignInAt: authUser.last_sign_in_at
+      groupName: userRecord.groups ? userRecord.groups.name : null
     };
 
     if (currentUser.role === 'super_admin') {
@@ -1033,9 +1023,7 @@ async function restoreSavedSession() {
       email: userRecord.email,
       role: userRecord.role,
       groupId: userRecord.group_id,
-      groupName: userRecord.groups ? userRecord.groups.name : null,
-      accountCreatedAt: authUser.created_at,
-      lastSignInAt: authUser.last_sign_in_at
+      groupName: userRecord.groups ? userRecord.groups.name : null
     };
 
     if (currentUser.role === 'super_admin') {
@@ -1124,34 +1112,7 @@ async function showDashboard() {
   await renderTeam();
   await renderWitnessesToday();
   if (isSuper) await renderSuperAdminPanel();
-  showAppUpdateIfNeeded();
 }
-
-function showAppUpdateIfNeeded() {
-  if (!currentUser || !APP_UPDATE_VERSION.trim() || !APP_UPDATE_MESSAGE.trim()) return;
-
-  const storageKey = `evangelism_seen_update_${currentUser.id}`;
-  if (localStorage.getItem(storageKey) === APP_UPDATE_VERSION) return;
-
-  const accountCreatedAt = Date.parse(currentUser.accountCreatedAt || '');
-  const lastSignInAt = Date.parse(currentUser.lastSignInAt || '');
-  if (!Number.isFinite(accountCreatedAt) || !Number.isFinite(lastSignInAt)) return;
-  if (lastSignInAt <= accountCreatedAt) {
-    localStorage.setItem(storageKey, APP_UPDATE_VERSION);
-    return;
-  }
-
-  document.getElementById('app-update-version').textContent = `Version ${APP_UPDATE_VERSION}`;
-  document.getElementById('app-update-message').textContent = APP_UPDATE_MESSAGE;
-  document.getElementById('app-update-modal').classList.add('active');
-  document.getElementById('acknowledge-app-update-btn').focus();
-}
-
-document.getElementById('acknowledge-app-update-btn').addEventListener('click', () => {
-  if (!currentUser) return;
-  localStorage.setItem(`evangelism_seen_update_${currentUser.id}`, APP_UPDATE_VERSION);
-  document.getElementById('app-update-modal').classList.remove('active');
-});
 
 // --- TAB SWITCHING ---
 tabBtns.forEach(btn => {

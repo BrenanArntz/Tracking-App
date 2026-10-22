@@ -176,16 +176,18 @@
 
           <div class="card witnesses-today-card" id="witnesses-today-disclosure">
             <div class="witnesses-today-header">
-              <button type="button" class="witnesses-today-toggle" id="witnesses-today-toggle" aria-expanded="false" aria-controls="witnesses-today-content">
-                <span id="witnesses-today-summary">Who's Been Witnessing Today? (0)</span>
-                <span class="witnesses-today-chevron" aria-hidden="true"></span>
-              </button>
+              <div class="witnesses-today-title-group">
+                <button type="button" class="witnesses-today-toggle" id="witnesses-today-toggle" aria-expanded="false" aria-controls="witnesses-today-content">
+                  <span id="witnesses-today-summary">Who's Been Witnessing Today? (0)</span>
+                  <span class="witnesses-today-chevron" aria-hidden="true"></span>
+                </button>
+                <p class="witnesses-today-explanation">People who have had a chat in the last 24 hours.</p>
+              </div>
               <div class="witnesses-today-filters" role="group" aria-label="Filter witness activity">
                 <button type="button" class="witnesses-today-filter" data-witness-filter="our-team" aria-pressed="false">Our Team</button>
                 <button type="button" class="witnesses-today-filter" data-witness-filter="all-teams" aria-pressed="true">All Teams</button>
               </div>
             </div>
-            <p class="witnesses-today-explanation">People who have had a chat in the last 24 hours.</p>
             <div class="witnesses-today-content" id="witnesses-today-content" hidden>
               <ul id="witnesses-today-list" class="log-list">
                 <li class="empty-state">Expand to see who has logged chats in the last 24 hours.</li>
@@ -763,23 +765,11 @@
       </div>
     </div>
 
-    <!-- VERSIONED UPDATE NOTICE -->
-    <div id="app-update-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="app-update-title" aria-describedby="app-update-message">
-      <div class="modal-content card">
-        <div class="modal-header">
-          <h3 id="app-update-title">What’s New</h3>
-        </div>
-        <p id="app-update-version" class="subtitle"></p>
-        <p id="app-update-message" class="app-update-message"></p>
-        <button type="button" id="acknowledge-app-update-btn" class="btn primary">Got it</button>
-      </div>
-    </div>
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

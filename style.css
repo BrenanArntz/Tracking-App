@@ -911,14 +911,18 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.witnesses-today-title-group {
+  min-width: 0;
 }
 
 .witnesses-today-explanation {
-  margin: -6px 12px 10px;
+  margin: 3px 0 0 2px;
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   line-height: 1.3;
 }
 
@@ -956,7 +960,8 @@ textarea {
 }
 
 .witnesses-today-content {
-  padding: 0 14px 15px;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 16px;
 }
 
 .witnesses-today-filters {
@@ -1046,13 +1051,23 @@ textarea {
 
 @media (max-width: 480px) {
   .witnesses-today-header {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
-    gap: 4px;
+    gap: 12px;
+    padding: 14px;
   }
 
   .witnesses-today-filters {
-    align-self: flex-end;
+    width: 100%;
+  }
+
+  .witnesses-today-filter {
+    flex: 1;
+    text-align: center;
+  }
+
+  .witnesses-today-content {
+    padding: 12px 14px 14px;
   }
 }
 
@@ -1402,13 +1417,6 @@ textarea {
   font-size: 1.8rem;
   line-height: 1;
   color: var(--muted);
-}
-
-.app-update-message {
-  margin: 0 0 18px;
-  color: var(--text);
-  line-height: 1.6;
-  white-space: pre-wrap;
 }
 
 @media (max-width: 480px) {

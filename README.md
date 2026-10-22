@@ -23,7 +23,3 @@ supabase functions deploy delete-user
 ```
 
 The app uses localStorage as a fallback when Supabase is unavailable.
-
-## Release changelog
-
-Before publishing an app update, change `APP_UPDATE_VERSION` and `APP_UPDATE_MESSAGE` near the top of `app.js`. List the member-facing features from that release as separate `-` bullets, and omit features that are only available to admins. The version should be unique for each release; the message is shown to each returning user once for that version. First-time users are not shown the changelog. Increase the `app.js` query version in `index.html` and the cache version in `sw.js` when needed to ensure clients receive the new update.
