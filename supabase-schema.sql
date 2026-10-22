@@ -4,7 +4,14 @@ CREATE TABLE IF NOT EXISTS groups (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   timezone TEXT NOT NULL DEFAULT 'UTC',
+  country TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS admin_group_categories (
+  group_id TEXT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
+  needgod_net BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -83,6 +90,7 @@ CREATE TABLE IF NOT EXISTS resources (
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS default_key TEXT;
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
 ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS photo_date DATE DEFAULT CURRENT_DATE;
 ALTER TABLE team_photos ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
@@ -99,6 +107,7 @@ ALTER TABLE events ALTER COLUMN event_timezone SET NOT NULL;
 
 -- RLS policies for authenticated users and group-scoped application access.
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_group_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
@@ -210,6 +219,27 @@ CREATE POLICY groups_delete_for_super_admin ON groups
   FOR DELETE TO authenticated
   USING (public.is_super_admin());
 
+DROP POLICY IF EXISTS admin_group_categories_select_for_super_admin ON admin_group_categories;
+CREATE POLICY admin_group_categories_select_for_super_admin ON admin_group_categories
+  FOR SELECT TO authenticated
+  USING (public.is_super_admin());
+
+DROP POLICY IF EXISTS admin_group_categories_insert_for_super_admin ON admin_group_categories;
+CREATE POLICY admin_group_categories_insert_for_super_admin ON admin_group_categories
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_super_admin());
+
+DROP POLICY IF EXISTS admin_group_categories_update_for_super_admin ON admin_group_categories;
+CREATE POLICY admin_group_categories_update_for_super_admin ON admin_group_categories
+  FOR UPDATE TO authenticated
+  USING (public.is_super_admin())
+  WITH CHECK (public.is_super_admin());
+
+DROP POLICY IF EXISTS admin_group_categories_delete_for_super_admin ON admin_group_categories;
+CREATE POLICY admin_group_categories_delete_for_super_admin ON admin_group_categories
+  FOR DELETE TO authenticated
+  USING (public.is_super_admin());
+
 DROP POLICY IF EXISTS users_select_for_group ON users;
 CREATE POLICY users_select_for_group ON users
   FOR SELECT TO authenticated
@@ -239,6 +269,139 @@ DROP POLICY IF EXISTS chat_logs_select_for_group ON chat_logs;
 CREATE POLICY chat_logs_select_for_group ON chat_logs
   FOR SELECT TO authenticated
   USING (public.is_super_admin() OR group_id = public.current_profile_group_id());
+
+DROP FUNCTION IF EXISTS public.recent_group_witness_activity();
+CREATE FUNCTION public.recent_group_witness_activity()
+RETURNS TABLE(
+  participants TEXT[],
+  group_name TEXT,
+  country TEXT,
+  chat_count BIGINT,
+  chat_ids TEXT[]
+)
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = ''
+STABLE
+AS $$
+  WITH recent_chats AS (
+    SELECT
+      chat_logs.id,
+      chat_logs.group_id,
+      groups.name AS group_name,
+      groups.country,
+      CASE
+        WHEN COALESCE(cardinality(chat_logs.evangelists), 0) = 0
+          THEN ARRAY[users.full_name]
+        ELSE chat_logs.evangelists
+      END AS evangelists
+    FROM public.chat_logs AS chat_logs
+    JOIN public.users AS users ON users.id = chat_logs.author_id
+    JOIN public.groups AS groups ON groups.id = chat_logs.group_id
+    WHERE auth.uid() IS NOT NULL
+      AND chat_logs.created_at >= NOW() - INTERVAL '24 hours'
+      AND chat_logs.created_at <= NOW()
+  ),
+  chats_with_teams AS (
+    SELECT
+      recent_chats.id,
+      recent_chats.group_id,
+      recent_chats.group_name,
+      recent_chats.country,
+      normalized_team.participant_keys,
+      display_team.participants
+    FROM recent_chats
+    CROSS JOIN LATERAL (
+      SELECT ARRAY_AGG(team.person_key ORDER BY team.person_key) AS participant_keys
+      FROM (
+        SELECT DISTINCT LOWER(BTRIM(person_name)) AS person_key
+        FROM UNNEST(recent_chats.evangelists) AS names(person_name)
+        WHERE BTRIM(person_name) <> ''
+      ) AS team
+    ) AS normalized_team
+    CROSS JOIN LATERAL (
+      SELECT ARRAY_AGG(team.person_name ORDER BY team.person_key) AS participants
+      FROM (
+        SELECT LOWER(BTRIM(person_name)) AS person_key, MIN(BTRIM(person_name)) AS person_name
+        FROM UNNEST(recent_chats.evangelists) AS names(person_name)
+        WHERE BTRIM(person_name) <> ''
+        GROUP BY LOWER(BTRIM(person_name))
+      ) AS team
+    ) AS display_team
+  )
+  SELECT
+    chats_with_teams.participants,
+    chats_with_teams.group_name,
+    chats_with_teams.country,
+    COUNT(*)::BIGINT,
+    ARRAY_AGG(chats_with_teams.id ORDER BY chats_with_teams.id)
+  FROM chats_with_teams
+  WHERE auth.uid() IS NOT NULL
+    AND cardinality(chats_with_teams.participants) > 0
+  GROUP BY
+    chats_with_teams.participant_keys,
+    chats_with_teams.participants,
+    chats_with_teams.group_id,
+    chats_with_teams.group_name,
+    chats_with_teams.country
+$$;
+
+REVOKE ALL ON FUNCTION public.recent_group_witness_activity() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.recent_group_witness_activity() TO authenticated;
+
+DROP FUNCTION IF EXISTS public.recent_group_witness_chats(TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.recent_group_witness_chats(TEXT[]);
+CREATE FUNCTION public.recent_group_witness_chats(
+  p_chat_ids TEXT[]
+)
+RETURNS TABLE(
+  id TEXT,
+  author_id TEXT,
+  author_name TEXT,
+  group_name TEXT,
+  person_name TEXT,
+  log_date DATE,
+  evangelists TEXT[],
+  progress INTEGER,
+  heard_gospel_count INTEGER,
+  professed_count INTEGER,
+  notes TEXT,
+  location TEXT,
+  photo_url TEXT,
+  created_at TIMESTAMPTZ
+)
+LANGUAGE SQL
+SECURITY DEFINER
+SET search_path = ''
+STABLE
+AS $$
+  SELECT
+    chat_logs.id,
+    chat_logs.author_id,
+    users.full_name,
+    groups.name,
+    chat_logs.person_name,
+    chat_logs.log_date,
+    chat_logs.evangelists,
+    chat_logs.progress,
+    chat_logs.heard_gospel_count,
+    chat_logs.professed_count,
+    chat_logs.notes,
+    chat_logs.location,
+    chat_logs.photo_url,
+    chat_logs.created_at
+  FROM public.chat_logs AS chat_logs
+  JOIN public.users AS users ON users.id = chat_logs.author_id
+  JOIN public.groups AS groups ON groups.id = chat_logs.group_id
+  WHERE auth.uid() IS NOT NULL
+    AND chat_logs.id = ANY(p_chat_ids)
+    AND chat_logs.created_at >= NOW() - INTERVAL '24 hours'
+    AND chat_logs.created_at <= NOW()
+  ORDER BY chat_logs.created_at DESC
+$$;
+
+REVOKE ALL ON FUNCTION public.recent_group_witness_chats(TEXT[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.recent_group_witness_chats(TEXT[]) TO authenticated;
 
 DROP POLICY IF EXISTS chat_logs_insert_for_group ON chat_logs;
 CREATE POLICY chat_logs_insert_for_group ON chat_logs

@@ -897,6 +897,181 @@ textarea {
   overflow: hidden;
 }
 
+.team-log-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.witnesses-today-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.witnesses-today-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.witnesses-today-explanation {
+  margin: -6px 12px 10px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.3;
+}
+
+.witnesses-today-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  padding: 6px 2px;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.witnesses-today-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.witnesses-today-chevron {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-right: 2px solid var(--primary);
+  border-bottom: 2px solid var(--primary);
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.witnesses-today-toggle[aria-expanded="true"] .witnesses-today-chevron {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.witnesses-today-content {
+  padding: 0 14px 15px;
+}
+
+.witnesses-today-filters {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.witnesses-today-filter {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: rgba(148, 163, 184, 0.09);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.witnesses-today-filter[aria-pressed="true"] {
+  border-color: rgba(249, 115, 22, 0.55);
+  background: rgba(249, 115, 22, 0.16);
+  color: #ffffff;
+}
+
+.witnesses-today-filter:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.witnesses-today-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.witness-chats-disclosure > summary {
+  cursor: pointer;
+  color: #ffffff;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.witness-chats-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0 0 0 18px;
+}
+
+.witness-chats-list li + li {
+  margin-top: 6px;
+}
+
+.witness-chat-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.witnesses-today-team {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.group-country-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.group-country-form label {
+  font-size: 0.82rem;
+}
+
+.group-country-form input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .witnesses-today-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .witnesses-today-filters {
+    align-self: flex-end;
+  }
+}
+
+.team-log-card summary {
+  cursor: pointer;
+  padding: 16px 14px;
+  color: #ffffff;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.team-log-card summary::marker {
+  color: var(--primary);
+}
+
+.team-log-content {
+  padding: 0 14px 15px;
+}
+
 .team-photos-card summary {
   cursor: pointer;
   padding: 16px 14px;
@@ -1227,6 +1402,13 @@ textarea {
   font-size: 1.8rem;
   line-height: 1;
   color: var(--muted);
+}
+
+.app-update-message {
+  margin: 0 0 18px;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 480px) {

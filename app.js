@@ -1,6 +1,14 @@
 // Convert a Date or ISO string to the format a datetime-local input expects
 // (YYYY-MM-DDTHH:mm in local time). Avoids the value being cleared by the
 // browser when given an ISO string with a timezone suffix.
+const APP_UPDATE_VERSION = '2026.10.22.1';
+const APP_UPDATE_MESSAGE = `- "Who's Been Witnessing" Log
+- Our Team / All Teams filters
+- Expandable chats with chat details
+- Group country information
+- Team Log loads when opened
+- Location suggestions while logging a conversation`;
+
 function toLocalDateTimeInput(value) {
   if (value === null || value === undefined || value === '') return '';
 
@@ -94,6 +102,7 @@ function utcToTimezoneDateTimeInput(value, timezone) {
 let currentUser = null;
 let activeGroupName = null;
 let selectedStatsRange = 'all';
+let witnessTeamFilter = 'all-teams';
 let chatDateDefault = '';
 const logViewState = {
   search: '',
@@ -145,6 +154,31 @@ updateInstallAppButton();
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
   deferredInstallPrompt = event;
+});
+
+document.getElementById('team-log-disclosure').addEventListener('toggle', event => {
+  if (event.target.open) {
+    renderLogs();
+  } else {
+    logRenderVersion++;
+  }
+});
+
+document.getElementById('witnesses-today-toggle').addEventListener('click', event => {
+  const content = document.getElementById('witnesses-today-content');
+  content.hidden = !content.hidden;
+  event.currentTarget.setAttribute('aria-expanded', String(!content.hidden));
+  if (!content.hidden) renderWitnessesToday();
+});
+
+document.querySelectorAll('[data-witness-filter]').forEach(button => {
+  button.addEventListener('click', () => {
+    witnessTeamFilter = button.dataset.witnessFilter;
+    document.querySelectorAll('[data-witness-filter]').forEach(filterButton => {
+      filterButton.setAttribute('aria-pressed', String(filterButton === button));
+    });
+    renderWitnessesToday();
+  });
 });
 
 window.addEventListener('appinstalled', () => {
@@ -728,6 +762,17 @@ function mergeEvangelistNames(names) {
   });
 }
 
+function normalizeWitnessNames(names) {
+  const namesByKey = new Map();
+  (names || []).forEach(value => {
+    const name = String(value || '').trim();
+    const key = name.toLowerCase();
+    if (key && !namesByKey.has(key)) namesByKey.set(key, name);
+  });
+  return Array.from(namesByKey.values())
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
 function toggleAdditionalEvangelists(isEdit, show) {
   const input = document.getElementById(isEdit ? 'edit-additional-evangelists' : 'additional-evangelists');
   const button = document.getElementById(isEdit ? 'show-edit-additional-evangelists' : 'show-additional-evangelists');
@@ -819,11 +864,11 @@ async function setActiveGroupContext(groupName) {
   await refreshChatDateDefault(true);
   switchTab('tab-tracker');
   renderEvangelistCheckboxes();
-  const dashboardLogs = await loadChatLogsFromSupabase();
-  await renderLogs(true);
+  await renderWitnessesToday();
+  await renderLogs();
   await renderCalendar();
   await renderResources();
-  await renderTeam(dashboardLogs);
+  await renderTeam();
   renderSuperAdminPanel();
 }
 
@@ -908,7 +953,9 @@ loginForm.addEventListener('submit', async (e) => {
       email: userRecord.email,
       role: userRecord.role,
       groupId: userRecord.group_id,
-      groupName: userRecord.groups ? userRecord.groups.name : null
+      groupName: userRecord.groups ? userRecord.groups.name : null,
+      accountCreatedAt: authUser.created_at,
+      lastSignInAt: authUser.last_sign_in_at
     };
 
     if (currentUser.role === 'super_admin') {
@@ -986,7 +1033,9 @@ async function restoreSavedSession() {
       email: userRecord.email,
       role: userRecord.role,
       groupId: userRecord.group_id,
-      groupName: userRecord.groups ? userRecord.groups.name : null
+      groupName: userRecord.groups ? userRecord.groups.name : null,
+      accountCreatedAt: authUser.created_at,
+      lastSignInAt: authUser.last_sign_in_at
     };
 
     if (currentUser.role === 'super_admin') {
@@ -1073,8 +1122,36 @@ async function showDashboard() {
   await renderCalendar();
   await renderResources();
   await renderTeam();
+  await renderWitnessesToday();
   if (isSuper) await renderSuperAdminPanel();
+  showAppUpdateIfNeeded();
 }
+
+function showAppUpdateIfNeeded() {
+  if (!currentUser || !APP_UPDATE_VERSION.trim() || !APP_UPDATE_MESSAGE.trim()) return;
+
+  const storageKey = `evangelism_seen_update_${currentUser.id}`;
+  if (localStorage.getItem(storageKey) === APP_UPDATE_VERSION) return;
+
+  const accountCreatedAt = Date.parse(currentUser.accountCreatedAt || '');
+  const lastSignInAt = Date.parse(currentUser.lastSignInAt || '');
+  if (!Number.isFinite(accountCreatedAt) || !Number.isFinite(lastSignInAt)) return;
+  if (lastSignInAt <= accountCreatedAt) {
+    localStorage.setItem(storageKey, APP_UPDATE_VERSION);
+    return;
+  }
+
+  document.getElementById('app-update-version').textContent = `Version ${APP_UPDATE_VERSION}`;
+  document.getElementById('app-update-message').textContent = APP_UPDATE_MESSAGE;
+  document.getElementById('app-update-modal').classList.add('active');
+  document.getElementById('acknowledge-app-update-btn').focus();
+}
+
+document.getElementById('acknowledge-app-update-btn').addEventListener('click', () => {
+  if (!currentUser) return;
+  localStorage.setItem(`evangelism_seen_update_${currentUser.id}`, APP_UPDATE_VERSION);
+  document.getElementById('app-update-modal').classList.remove('active');
+});
 
 // --- TAB SWITCHING ---
 tabBtns.forEach(btn => {
@@ -1155,6 +1232,8 @@ function autofillChatLocation(isEdit = false) {
 }
 
 let chatLocationSuggestions = [];
+let chatLocationSuggestionsGroup = '';
+let chatLocationSuggestionsPromise = null;
 
 function closeChatLocationSuggestions(input) {
   const list = document.getElementById(input.dataset.suggestions);
@@ -1220,9 +1299,60 @@ function renderChatLocationSuggestions(logs) {
   });
 }
 
+async function refreshChatLocationSuggestions() {
+  if (!currentUser) return;
+  const targetGroup = getEffectiveGroupName();
+  if (!targetGroup) return;
+  if (chatLocationSuggestionsPromise && chatLocationSuggestionsGroup === targetGroup) {
+    return chatLocationSuggestionsPromise;
+  }
+
+  chatLocationSuggestionsGroup = targetGroup;
+  const cachedLogs = getStoredArray('evangelism_logs')
+    .filter(log => log.groupName === targetGroup);
+  renderChatLocationSuggestions(cachedLogs);
+
+  chatLocationSuggestionsPromise = (async () => {
+    try {
+      const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+      if (!supabase) return;
+
+      const groupId = await getEffectiveGroupIdAsync();
+      const { data, error } = await supabase
+        .from('chat_logs')
+        .select('location')
+        .eq('group_id', groupId);
+      if (error) throw new Error(error.message);
+      if (getEffectiveGroupName() !== targetGroup) return;
+
+      const combinedLocations = [
+        ...cachedLogs.map(log => log.location),
+        ...(data || []).map(log => log.location)
+      ].map(location => ({ location }));
+      renderChatLocationSuggestions(combinedLocations);
+    } catch (error) {
+      console.warn('Unable to refresh chat location suggestions:', error);
+    } finally {
+      if (chatLocationSuggestionsGroup === targetGroup) {
+        chatLocationSuggestionsPromise = null;
+      }
+    }
+  })();
+
+  return chatLocationSuggestionsPromise;
+}
+
 document.addEventListener('input', event => {
   const input = event.target.closest('.chat-location-input');
-  if (input) showChatLocationSuggestions(input);
+  if (input) {
+    showChatLocationSuggestions(input);
+    if (!chatLocationSuggestions.length) refreshChatLocationSuggestions();
+  }
+});
+
+document.addEventListener('focusin', event => {
+  const input = event.target.closest('.chat-location-input');
+  if (input) refreshChatLocationSuggestions();
 });
 
 document.addEventListener('keydown', event => {
@@ -1439,6 +1569,7 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   const logs = JSON.parse(localStorage.getItem('evangelism_logs') || '[]');
   logs.unshift(newLog);
   localStorage.setItem('evangelism_logs', JSON.stringify(logs));
+  renderChatLocationSuggestions(logs.filter(log => log.groupName === targetGroup));
 
   document.getElementById('tracker-form').reset();
   await refreshChatDateDefault(true);
@@ -1452,19 +1583,25 @@ document.getElementById('tracker-form').addEventListener('submit', async (e) => 
   syncLogCounters(false);
   renderEvangelistCheckboxes();
   await renderLogs();
+  await renderWitnessesToday();
 });
 
 async function renderLogs(useCachedLogs = false) {
   if (!ensureUserSession()) return;
 
+  const teamLogDisclosure = document.getElementById('team-log-disclosure');
+  if (!teamLogDisclosure.open) return;
+
   const renderVersion = ++logRenderVersion;
+  const logList = document.getElementById('log-list');
+  const loadMoreContainer = document.getElementById('log-load-more-container');
+  logList.innerHTML = '<li class="empty-state">Loading team conversations...</li>';
+  if (loadMoreContainer) loadMoreContainer.innerHTML = '';
   const logs = useCachedLogs
     ? getStoredArray('evangelism_logs')
     : await loadChatLogsFromSupabase();
-  if (renderVersion !== logRenderVersion) return;
+  if (renderVersion !== logRenderVersion || !teamLogDisclosure.open) return;
 
-  const logList = document.getElementById('log-list');
-  const loadMoreContainer = document.getElementById('log-load-more-container');
   logList.innerHTML = '';
   if (loadMoreContainer) loadMoreContainer.innerHTML = '';
 
@@ -1475,6 +1612,7 @@ async function renderLogs(useCachedLogs = false) {
 
   renderChatLocationSuggestions(relevantLogs);
   updateLogFilterOptions(relevantLogs);
+  if (!useCachedLogs) await renderTeamStats(logs);
 
   const searchTerm = logViewState.search.trim().toLowerCase();
   const filteredLogs = relevantLogs
@@ -1571,9 +1709,9 @@ async function renderLogs(useCachedLogs = false) {
   }
 }
 
-window.openChatDetails = function(logId) {
+window.openChatDetails = function(logId, logDetails = null) {
   const logs = getStoredArray('evangelism_logs');
-  const log = logs.find(item => String(item.id) === String(logId));
+  const log = logDetails || logs.find(item => String(item.id) === String(logId));
   if (!log) return;
 
   document.getElementById('chat-details-title').textContent = log.name || 'Conversation Details';
@@ -1801,6 +1939,7 @@ document.getElementById('edit-tracker-form').addEventListener('submit', async (e
     localStorage.setItem('evangelism_logs', JSON.stringify(logs));
     document.getElementById('edit-modal').classList.remove('active');
     await renderLogs();
+    await renderWitnessesToday();
   }
 });
 
@@ -1828,6 +1967,7 @@ window.deleteLog = async function(logId) {
     logs = logs.filter(l => String(l.id) !== String(logId));
     localStorage.setItem('evangelism_logs', JSON.stringify(logs));
     await renderLogs();
+    await renderWitnessesToday();
   }
 };
 
@@ -2523,6 +2663,19 @@ document.getElementById('rename-team-form').addEventListener('submit', async (e)
   delete cachedGroupIds[oldName];
   localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
+  const localCategories = JSON.parse(localStorage.getItem('evangelism_needgod_groups') || '{}');
+  if (Object.prototype.hasOwnProperty.call(localCategories, oldName)) {
+    localCategories[newName] = localCategories[oldName];
+    delete localCategories[oldName];
+    localStorage.setItem('evangelism_needgod_groups', JSON.stringify(localCategories));
+  }
+  const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+  if (Object.prototype.hasOwnProperty.call(localCountries, oldName)) {
+    localCountries[newName] = localCountries[oldName];
+    delete localCountries[oldName];
+    localStorage.setItem('evangelism_group_countries', JSON.stringify(localCountries));
+  }
+
   if (currentUser.role === 'director') currentUser.groupName = newName;
   activeGroupName = newName;
   if (['director', 'super_admin'].includes(currentUser.role)) {
@@ -2922,7 +3075,7 @@ async function loadAdminAccountSetupStatuses() {
 }
 
 async function renderTeamStats(logs = null) {
-  const chatLogs = logs || await loadChatLogsFromSupabase();
+  const chatLogs = logs || getStoredArray('evangelism_logs');
   const groupTimezone = await getEffectiveGroupTimezone();
   const targetGroup = getEffectiveGroupName();
   const groupLogs = chatLogs.filter(log => currentUser.role === 'super_admin'
@@ -2998,10 +3151,17 @@ function isLogInStatsRange(logDate, timezone) {
 document.getElementById('appoint-director-form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  if (!currentUser || currentUser.role !== 'super_admin') {
+    alert('Only the System Admin can create groups.');
+    return;
+  }
+
   const groupName = document.getElementById('group-name').value.trim();
   const directorName = document.getElementById('director-name').value.trim();
   const directorEmail = document.getElementById('director-email').value.trim();
   const groupTimezone = document.getElementById('new-group-timezone').value;
+  const groupCountry = document.getElementById('group-country').value.trim();
+  const needGodNet = document.getElementById('new-group-needgod').checked;
 
   if (!groupName || !directorName || !directorEmail || !groupTimezone) {
     alert('Please complete the group name, director name, and director email.');
@@ -3030,23 +3190,30 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
       let resolvedGroupId = groupId;
 
       if (existingGroupError) {
-        console.warn('Group lookup failed:', existingGroupError.message);
+        throw new Error(`Group lookup failed: ${existingGroupError.message}`);
       } else if (existingGroup && existingGroup.length) {
         resolvedGroupId = existingGroup[0].id;
       } else {
         const { data: insertedGroup, error: insertGroupError } = await supabase
           .from('groups')
-          .upsert([{ id: resolvedGroupId, name: groupName, timezone: groupTimezone }], { onConflict: 'id' })
+          .upsert([{ id: resolvedGroupId, name: groupName, timezone: groupTimezone, country: groupCountry }], { onConflict: 'id' })
           .select('id');
 
         if (insertGroupError) {
-          console.warn('Supabase group insert failed:', insertGroupError.message);
-        } else if (insertedGroup && insertedGroup.length) {
-          resolvedGroupId = insertedGroup[0].id;
+          throw new Error(`Supabase group insert failed: ${insertGroupError.message}`);
         }
+        if (!insertedGroup || !insertedGroup.length) {
+          throw new Error('Supabase did not return the created group.');
+        }
+        resolvedGroupId = insertedGroup[0].id;
 
         await seedDefaultResourcesForGroup(groupName, resolvedGroupId, supabase);
       }
+
+      if (!existingGroup || !existingGroup.length || groupCountry) {
+        await saveGroupCountry(groupName, resolvedGroupId, groupCountry);
+      }
+      await saveNeedGodGroupCategory(groupName, resolvedGroupId, needGodNet);
 
       if (!window.createAuthUserForInvite) {
         throw new Error('Authentication setup is not available.');
@@ -3081,6 +3248,8 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
 
     if (!supabase) {
       await seedDefaultResourcesForGroup(groupName, groupId, null);
+      await saveGroupCountry(groupName, groupId, groupCountry);
+      await saveNeedGodGroupCategory(groupName, groupId, needGodNet);
     }
 
     const team = getStoredArray('evangelism_team');
@@ -3111,37 +3280,346 @@ document.getElementById('appoint-director-form').addEventListener('submit', asyn
 
 async function loadAllGroupsFromSupabase() {
   const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
-  const groupsSet = new Set();
+  const groupsByName = new Map();
+  const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
 
   if (supabase) {
     try {
       const { data, error } = await supabase
         .from('groups')
-        .select('name');
-      if (data && !error) {
-        data.forEach(g => { if (g.name) groupsSet.add(g.name); });
-      }
+        .select('id, name, country');
+      if (error) throw new Error(error.message);
+      const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+      (data || []).forEach(group => {
+        if (group.name) {
+          groupsByName.set(group.name, {
+            id: group.id,
+            name: group.name,
+            country: group.country || localCountries[group.name] || ''
+          });
+        }
+      });
     } catch (e) {
       console.warn('Group fetch failed:', e);
     }
   }
 
+  const addGroupName = name => {
+    if (name && name !== 'System' && !groupsByName.has(name)) {
+      const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+      groupsByName.set(name, { id: cachedGroupIds[name] || null, name, country: localCountries[name] || '' });
+    }
+  };
   const team = getStoredArray('evangelism_team');
-  team.forEach(m => { if (m.groupName && m.groupName !== 'System') groupsSet.add(m.groupName); });
+  team.forEach(m => addGroupName(m.groupName));
 
-  const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
-  Object.keys(cachedGroupIds).forEach(g => { if (g && g !== 'System') groupsSet.add(g); });
+  Object.keys(cachedGroupIds).forEach(addGroupName);
 
   const resources = getStoredArray('evangelism_resources');
-  resources.forEach(r => { if (r.groupName && r.groupName !== 'System') groupsSet.add(r.groupName); });
+  resources.forEach(r => addGroupName(r.groupName));
 
   const logs = getStoredArray('evangelism_logs');
-  logs.forEach(l => { if (l.groupName && l.groupName !== 'System') groupsSet.add(l.groupName); });
+  logs.forEach(l => addGroupName(l.groupName));
 
   const events = getStoredArray('evangelism_events');
-  events.forEach(e => { if (e.groupName && e.groupName !== 'System') groupsSet.add(e.groupName); });
+  events.forEach(e => addGroupName(e.groupName));
 
-  return Array.from(groupsSet).sort();
+  return Array.from(groupsByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function loadNeedGodGroupCategories(groups) {
+  const categoriesByName = new Map();
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (!supabase) {
+    const localCategories = JSON.parse(localStorage.getItem('evangelism_needgod_groups') || '{}');
+    groups.forEach(group => {
+      categoriesByName.set(group.name, Boolean(localCategories[group.name]));
+    });
+    return categoriesByName;
+  }
+
+  const { data, error } = await supabase
+    .from('admin_group_categories')
+    .select('group_id, needgod_net');
+  if (error) throw new Error(error.message);
+
+  const groupNamesById = new Map(groups.filter(group => group.id).map(group => [String(group.id), group.name]));
+  (data || []).forEach(category => {
+    const groupName = groupNamesById.get(String(category.group_id));
+    if (groupName) categoriesByName.set(groupName, Boolean(category.needgod_net));
+  });
+  return categoriesByName;
+}
+
+async function saveNeedGodGroupCategory(groupName, groupId, needGodNet) {
+  if (!currentUser || currentUser.role !== 'super_admin') {
+    throw new Error('Only the System Admin can change this group category.');
+  }
+
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase) {
+    let resolvedGroupId = groupId;
+    if (!resolvedGroupId) {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('name', groupName)
+        .limit(1);
+      if (error) throw new Error(`Unable to find group: ${error.message}`);
+      if (!data || !data.length) throw new Error('Unable to find this group.');
+      resolvedGroupId = data[0].id;
+    }
+
+    const { error } = await supabase
+      .from('admin_group_categories')
+      .upsert([{
+        group_id: resolvedGroupId,
+        needgod_net: Boolean(needGodNet),
+        updated_at: new Date().toISOString()
+      }], { onConflict: 'group_id' });
+    if (error) throw new Error(error.message);
+  } else {
+    const localCategories = JSON.parse(localStorage.getItem('evangelism_needgod_groups') || '{}');
+    localCategories[groupName] = Boolean(needGodNet);
+    localStorage.setItem('evangelism_needgod_groups', JSON.stringify(localCategories));
+  }
+}
+
+async function saveGroupCountry(groupName, groupId, country) {
+  if (!currentUser || currentUser.role !== 'super_admin') {
+    throw new Error('Only the System Admin can change a group country.');
+  }
+
+  const normalizedCountry = String(country || '').trim();
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (supabase) {
+    let resolvedGroupId = groupId;
+    if (!resolvedGroupId) {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('name', groupName)
+        .limit(1);
+      if (error) throw new Error(`Unable to find group: ${error.message}`);
+      if (!data || !data.length) throw new Error('Unable to find this group.');
+      resolvedGroupId = data[0].id;
+    }
+
+    const { error } = await supabase
+      .from('groups')
+      .update({ country: normalizedCountry })
+      .eq('id', resolvedGroupId);
+    if (error) throw new Error(error.message);
+  }
+  const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+  localCountries[groupName] = normalizedCountry;
+  localStorage.setItem('evangelism_group_countries', JSON.stringify(localCountries));
+}
+
+async function loadRecentWitnessLogs() {
+  const now = Date.now();
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (!supabase) {
+    const groupCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+    const recentLogs = getStoredArray('evangelism_logs').filter(log => {
+      const createdAt = Date.parse(log.createdAt || '');
+      return Number.isFinite(createdAt)
+        && createdAt >= cutoff
+        && createdAt <= now;
+    });
+
+    const witnesses = new Map();
+    recentLogs.forEach(log => {
+      const names = normalizeWitnessNames(log.evangelists && log.evangelists.length
+        ? log.evangelists
+        : [getChatAuthorName(log)]);
+      if (!names.length) return;
+      const team = log.groupName || '';
+      const teamKey = names.map(name => name.trim().toLowerCase()).join('|');
+      const witnessKey = `${teamKey}|${team}`;
+      const witness = witnesses.get(witnessKey) || {
+        participants: names,
+        group_name: team,
+        country: groupCountries[team] || '',
+        chat_count: 0,
+        chat_ids: []
+      };
+      witness.chat_count++;
+      witness.chat_ids.push(String(log.id));
+      witnesses.set(witnessKey, witness);
+    });
+    return Array.from(witnesses.values());
+  }
+
+  const { data, error } = await supabase.rpc('recent_group_witness_activity');
+  if (error) throw new Error(error.message);
+
+  return data || [];
+}
+
+function mapRecentWitnessChat(chat) {
+  return {
+    id: chat.id,
+    authorId: chat.author_id,
+    authorName: chat.author_name || '',
+    groupName: chat.group_name || '',
+    name: chat.person_name || '',
+    date: chat.log_date || '',
+    evangelists: chat.evangelists || [],
+    progress: chat.progress || 0,
+    heardGospelCount: chat.heard_gospel_count || 0,
+    professedCount: chat.professed_count || 0,
+    notes: chat.notes || '',
+    location: chat.location || '',
+    photo: chat.photo_url || '',
+    createdAt: chat.created_at || ''
+  };
+}
+
+async function loadWitnessChats(chatIds) {
+  const now = Date.now();
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const supabase = window.getSupabaseClient ? window.getSupabaseClient() : null;
+  if (!supabase) {
+    return getStoredArray('evangelism_logs')
+      .filter(log => {
+        const createdAt = Date.parse(log.createdAt || '');
+        return chatIds.includes(String(log.id))
+          && Number.isFinite(createdAt)
+          && createdAt >= cutoff
+          && createdAt <= now;
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  }
+
+  const { data, error } = await supabase.rpc('recent_group_witness_chats', { p_chat_ids: chatIds });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapRecentWitnessChat);
+}
+
+async function renderWitnessesToday() {
+  const summary = document.getElementById('witnesses-today-summary');
+  const list = document.getElementById('witnesses-today-list');
+  summary.textContent = "Who's Been Witnessing Today? (…)";
+  list.innerHTML = '<li class="empty-state">Loading recent activity...</li>';
+
+  try {
+    const witnesses = await loadRecentWitnessLogs();
+    const witnessCounts = new Map();
+    witnesses.forEach(witness => {
+      const participants = normalizeWitnessNames(witness.participants);
+      if (!participants.length || !witness.group_name) return;
+      const witnessKey = `${participants.map(name => name.toLowerCase()).join('|')}|${witness.group_name}`;
+      const existing = witnessCounts.get(witnessKey);
+      if (existing) {
+        existing.chats += Number(witness.chat_count) || 0;
+        existing.chatIds.push(...(witness.chat_ids || []).map(String));
+        return;
+      }
+      witnessCounts.set(witnessKey, {
+        participants,
+        chats: Number(witness.chat_count) || 0,
+        team: witness.group_name,
+        country: witness.country || '',
+        chatIds: (witness.chat_ids || []).map(String)
+      });
+    });
+
+    const currentGroup = getEffectiveGroupName();
+    const allWitnessGroups = Array.from(witnessCounts.values());
+    const witnessList = allWitnessGroups
+      .filter(witness => witnessTeamFilter === 'all-teams' || witness.team === currentGroup)
+      .sort((a, b) => b.chats - a.chats
+        || a.participants.join(', ').localeCompare(b.participants.join(', '), undefined, { sensitivity: 'base' }));
+    const peopleCount = new Set(witnessList.flatMap(witness => witness.participants)
+      .map(name => name.trim().toLowerCase())).size;
+    summary.textContent = `Who's Been Witnessing Today? (${peopleCount} ${peopleCount === 1 ? 'person' : 'people'})`;
+    list.innerHTML = '';
+
+    if (!witnessList.length) {
+      list.innerHTML = '<li class="empty-state">No chats have been logged in the last 24 hours.</li>';
+      return;
+    }
+
+    witnessList.forEach(witness => {
+      const item = document.createElement('li');
+      item.className = 'witnesses-today-item';
+      const disclosure = document.createElement('details');
+      disclosure.className = 'witness-chats-disclosure';
+      const title = document.createElement('summary');
+      const chatLabel = witness.chats === 1 ? 'chat' : 'chats';
+      title.textContent = `${witness.participants.join(', ')} - ${witness.chats} ${chatLabel} (${witness.country || 'Country not set'})`;
+      const team = document.createElement('span');
+      team.className = 'witnesses-today-team';
+      team.textContent = `Team: ${witness.team}`;
+      const chatList = document.createElement('ul');
+      chatList.className = 'witness-chats-list';
+      const loadingItem = document.createElement('li');
+      loadingItem.className = 'empty-state';
+      loadingItem.textContent = 'Expand to load chats from this witnessing group.';
+      chatList.appendChild(loadingItem);
+      disclosure.append(title, team, chatList);
+      disclosure.addEventListener('toggle', async () => {
+        if (!disclosure.open || disclosure.dataset.loaded === 'true') return;
+        chatList.innerHTML = '<li class="empty-state">Loading chats...</li>';
+        try {
+          const chats = await loadWitnessChats(witness.chatIds);
+          chatList.innerHTML = '';
+          if (!chats.length) {
+            chatList.innerHTML = '<li class="empty-state">No chats found for this witnessing group in the last 24 hours.</li>';
+          } else {
+            chats.forEach(chat => {
+              const chatItem = document.createElement('li');
+              chatItem.className = 'log-item';
+              const tagsHtml = (chat.evangelists || []).map(name => `
+                <span class="tag ${name === chat.authorName ? 'logged-by' : ''}">${escapeHtml(name)}</span>
+              `).join('');
+              const photoUrl = typeof chat.photo === 'string' ? chat.photo.trim() : '';
+              const photoHtml = photoUrl && !['null', 'undefined'].includes(photoUrl.toLowerCase())
+                ? `<img src="${escapeHtml(photoUrl)}" alt="Conversation photo" class="log-photo" />`
+                : '';
+              chatItem.innerHTML = `
+                <div class="log-item-header">
+                  <span class="log-item-title">${escapeHtml(chat.name || 'Conversation')}</span>
+                  <span class="log-item-date">${escapeHtml(chat.date || '')}</span>
+                </div>
+                <div class="evangelist-tags">${tagsHtml}</div>
+                ${chat.location ? `<div class="log-item-location">${escapeHtml(chat.location)}</div>` : ''}
+                <div class="log-progress">
+                  <span class="progress-symbol" aria-hidden="true">${getProgressSymbol(chat.progress)}</span>
+                  <span class="progress-value">${escapeHtml(getProgressLabel(chat.progress))}</span>
+                </div>
+                ${photoHtml}
+                <p class="log-item-notes">${escapeHtml(chat.notes || 'No notes added.')}</p>
+              `;
+              chatItem.setAttribute('role', 'button');
+              chatItem.tabIndex = 0;
+              chatItem.setAttribute('aria-label', `View details for ${chat.name || 'conversation'}`);
+              chatItem.addEventListener('click', () => window.openChatDetails(chat.id, chat));
+              chatItem.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  window.openChatDetails(chat.id, chat);
+                }
+              });
+              chatList.appendChild(chatItem);
+            });
+          }
+          disclosure.dataset.loaded = 'true';
+        } catch (error) {
+          console.warn('Unable to load witness chats:', error);
+          chatList.innerHTML = '<li class="empty-state">Chats are unavailable. Close and reopen to try again.</li>';
+        }
+      });
+      item.appendChild(disclosure);
+      list.appendChild(item);
+    });
+  } catch (error) {
+    console.warn('Unable to load recent witness activity:', error);
+    summary.textContent = "Who's Been Witnessing Today? (—)";
+    list.innerHTML = '<li class="empty-state">Recent witness activity is unavailable. Please try again.</li>';
+  }
 }
 
 window.prefillAppointDirector = function(groupName) {
@@ -3197,6 +3675,13 @@ window.deleteGroupOnly = async function(groupName) {
     delete cachedGroupIds[groupName];
     localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
 
+    const localCategories = JSON.parse(localStorage.getItem('evangelism_needgod_groups') || '{}');
+    delete localCategories[groupName];
+    localStorage.setItem('evangelism_needgod_groups', JSON.stringify(localCategories));
+    const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+    delete localCountries[groupName];
+    localStorage.setItem('evangelism_group_countries', JSON.stringify(localCountries));
+
     if (activeGroupName === groupName) {
       activeGroupName = null;
     }
@@ -3210,14 +3695,16 @@ window.deleteGroupOnly = async function(groupName) {
 };
 
 async function renderSuperAdminPanel() {
-  if (!ensureUserSession()) return;
+  if (!ensureUserSession() || currentUser.role !== 'super_admin') return;
 
   const team = await loadTeamDataFromSupabase();
-  const allGroupNames = await loadAllGroupsFromSupabase();
+  const allGroups = await loadAllGroupsFromSupabase();
   const directorList = document.getElementById('director-list');
   const loginStatusWarning = document.getElementById('admin-login-status-warning');
+  const categoryStatusWarning = document.getElementById('admin-category-status-warning');
   directorList.innerHTML = '';
   loginStatusWarning.hidden = true;
+  categoryStatusWarning.hidden = true;
 
   let loginStatuses = null;
   try {
@@ -3228,12 +3715,24 @@ async function renderSuperAdminPanel() {
     loginStatusWarning.hidden = false;
   }
 
-  if (allGroupNames.length === 0) {
+  let needGodCategories = new Map();
+  let needGodCategoriesAvailable = true;
+  try {
+    needGodCategories = await loadNeedGodGroupCategories(allGroups);
+  } catch (error) {
+    console.warn('Unable to load private group categories:', error);
+    needGodCategoriesAvailable = false;
+    categoryStatusWarning.textContent = 'Private group categories are unavailable. Run the updated supabase-schema.sql in the Supabase SQL editor.';
+    categoryStatusWarning.hidden = false;
+  }
+
+  if (allGroups.length === 0) {
     directorList.innerHTML = '<li class="empty-state">No groups created yet.</li>';
     return;
   }
 
-  allGroupNames.forEach(groupName => {
+  allGroups.forEach((group, groupIndex) => {
+    const groupName = group.name;
     const director = team.find(m => m.groupName === groupName && (m.role === 'director' || m.role === 'super_admin'));
     const membersCount = team.filter(m => m.groupName === groupName).length;
 
@@ -3268,6 +3767,81 @@ async function renderSuperAdminPanel() {
     notesP.className = 'log-item-notes';
     notesP.textContent = director ? `${director.email} | ${membersCount} member(s)` : `${membersCount} member(s)`;
     li.appendChild(notesP);
+
+    const countryRow = document.createElement('p');
+    countryRow.className = 'log-item-notes';
+    countryRow.textContent = `Country: ${group.country || 'Not set'}`;
+    li.appendChild(countryRow);
+
+    const countryForm = document.createElement('form');
+    countryForm.className = 'group-country-form';
+    const countryLabel = document.createElement('label');
+    countryLabel.htmlFor = `group-country-${groupIndex}`;
+    countryLabel.textContent = 'Group country';
+    const countryInput = document.createElement('input');
+    countryInput.type = 'text';
+    countryInput.id = `group-country-${groupIndex}`;
+    countryInput.value = group.country || '';
+    countryInput.placeholder = 'e.g., United States';
+    countryInput.autocomplete = 'country-name';
+    countryInput.maxLength = 100;
+    const saveCountryButton = document.createElement('button');
+    saveCountryButton.type = 'submit';
+    saveCountryButton.className = 'btn-action edit';
+    saveCountryButton.textContent = 'Save Country';
+    countryForm.append(countryLabel, countryInput, saveCountryButton);
+    countryForm.addEventListener('click', event => event.stopPropagation());
+    countryForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      saveCountryButton.disabled = true;
+      try {
+        await saveGroupCountry(groupName, group.id, countryInput.value);
+        await renderSuperAdminPanel();
+      } catch (error) {
+        console.warn('Group country update failed:', error);
+        alert(`Unable to save this group country: ${error.message}`);
+      } finally {
+        saveCountryButton.disabled = false;
+      }
+    });
+    li.appendChild(countryForm);
+
+    const categoryForm = document.createElement('form');
+    categoryForm.className = 'checkbox-label';
+    categoryForm.dataset.groupName = groupName;
+    categoryForm.dataset.groupId = group.id || '';
+    const categoryInput = document.createElement('input');
+    categoryInput.type = 'checkbox';
+    categoryInput.id = `needgod-category-${groupIndex}`;
+    categoryInput.checked = needGodCategories.get(groupName) === true;
+    categoryInput.disabled = !needGodCategoriesAvailable;
+    const categoryLabel = document.createElement('label');
+    categoryLabel.htmlFor = categoryInput.id;
+    categoryLabel.textContent = 'NeedGod.net';
+    categoryForm.append(categoryInput, categoryLabel);
+    const saveCategoryButton = document.createElement('button');
+    saveCategoryButton.type = 'submit';
+    saveCategoryButton.className = 'btn-action edit';
+    saveCategoryButton.textContent = 'Save Category';
+    saveCategoryButton.disabled = !needGodCategoriesAvailable;
+    categoryForm.appendChild(saveCategoryButton);
+    categoryForm.addEventListener('click', event => event.stopPropagation());
+    categoryForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      saveCategoryButton.disabled = true;
+      try {
+        await saveNeedGodGroupCategory(groupName, group.id, categoryInput.checked);
+        await renderSuperAdminPanel();
+      } catch (error) {
+        console.warn('Group category update failed:', error);
+        alert(`Unable to save this group category: ${error.message}`);
+      } finally {
+        saveCategoryButton.disabled = false;
+      }
+    });
+    li.appendChild(categoryForm);
 
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'log-actions';
@@ -3535,6 +4109,14 @@ window.deleteUser = async function(userId, groupNameToDelete = null) {
       const cachedGroupIds = JSON.parse(localStorage.getItem('evangelism_group_ids') || '{}');
       delete cachedGroupIds[groupNameToDelete];
       localStorage.setItem('evangelism_group_ids', JSON.stringify(cachedGroupIds));
+
+      const localCategories = JSON.parse(localStorage.getItem('evangelism_needgod_groups') || '{}');
+      delete localCategories[groupNameToDelete];
+      localStorage.setItem('evangelism_needgod_groups', JSON.stringify(localCategories));
+
+      const localCountries = JSON.parse(localStorage.getItem('evangelism_group_countries') || '{}');
+      delete localCountries[groupNameToDelete];
+      localStorage.setItem('evangelism_group_countries', JSON.stringify(localCountries));
 
       if (activeGroupName === groupNameToDelete) {
         activeGroupName = null;

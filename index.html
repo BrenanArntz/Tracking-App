@@ -174,44 +174,65 @@
             </form>
           </div>
 
-          <div class="card">
-            <h3>Chat Log</h3>
-            <div class="log-toolbar" aria-label="Search and organize chat logs">
-              <div class="form-group log-search-group">
-                <label for="log-search">Search name, notes, evangelists, progress, or location</label>
-                <input type="search" id="log-search" placeholder="Search the chat log...">
-              </div>
-              <div class="log-filter-grid">
-                <div class="form-group">
-                  <label for="log-progress-filter">Filter by progress</label>
-                  <select id="log-progress-filter">
-                    <option value="all">All progress</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="log-evangelist-filter">Filter by evangelist</label>
-                  <select id="log-evangelist-filter">
-                    <option value="all">All evangelists</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="log-sort">Sort by</label>
-                  <select id="log-sort">
-                    <option value="date-desc">Most recent date</option>
-                    <option value="date-asc">Oldest date</option>
-                    <option value="name-asc">Person's name A-Z</option>
-                    <option value="name-desc">Person's name Z-A</option>
-                    <option value="progress-desc">Progress highest first</option>
-                    <option value="progress-asc">Progress lowest first</option>
-                  </select>
-                </div>
+          <div class="card witnesses-today-card" id="witnesses-today-disclosure">
+            <div class="witnesses-today-header">
+              <button type="button" class="witnesses-today-toggle" id="witnesses-today-toggle" aria-expanded="false" aria-controls="witnesses-today-content">
+                <span id="witnesses-today-summary">Who's Been Witnessing Today? (0)</span>
+                <span class="witnesses-today-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="witnesses-today-filters" role="group" aria-label="Filter witness activity">
+                <button type="button" class="witnesses-today-filter" data-witness-filter="our-team" aria-pressed="false">Our Team</button>
+                <button type="button" class="witnesses-today-filter" data-witness-filter="all-teams" aria-pressed="true">All Teams</button>
               </div>
             </div>
-            <ul id="log-list" class="log-list">
-              <li class="empty-state">No conversations logged yet.</li>
-            </ul>
-            <div id="log-load-more-container" class="log-load-more-container"></div>
+            <p class="witnesses-today-explanation">People who have had a chat in the last 24 hours.</p>
+            <div class="witnesses-today-content" id="witnesses-today-content" hidden>
+              <ul id="witnesses-today-list" class="log-list">
+                <li class="empty-state">Expand to see who has logged chats in the last 24 hours.</li>
+              </ul>
+            </div>
           </div>
+
+          <details class="card team-log-card" id="team-log-disclosure">
+            <summary>Team Log</summary>
+            <div class="team-log-content">
+              <div class="log-toolbar" aria-label="Search and organize team logs">
+                <div class="form-group log-search-group">
+                  <label for="log-search">Search name, notes, evangelists, progress, or location</label>
+                  <input type="search" id="log-search" placeholder="Search the team log...">
+                </div>
+                <div class="log-filter-grid">
+                  <div class="form-group">
+                    <label for="log-progress-filter">Filter by progress</label>
+                    <select id="log-progress-filter">
+                      <option value="all">All progress</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="log-evangelist-filter">Filter by evangelist</label>
+                    <select id="log-evangelist-filter">
+                      <option value="all">All evangelists</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="log-sort">Sort by</label>
+                    <select id="log-sort">
+                      <option value="date-desc">Most recent date</option>
+                      <option value="date-asc">Oldest date</option>
+                      <option value="name-asc">Person's name A-Z</option>
+                      <option value="name-desc">Person's name Z-A</option>
+                      <option value="progress-desc">Progress highest first</option>
+                      <option value="progress-asc">Progress lowest first</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <ul id="log-list" class="log-list">
+                <li class="empty-state">Expand Team Log to load conversations.</li>
+              </ul>
+              <div id="log-load-more-container" class="log-load-more-container"></div>
+            </div>
+          </details>
         </div>
 
         <!-- TAB 2: CALENDAR -->
@@ -413,7 +434,7 @@
           </details>
 
           <div class="card">
-            <h3>Local Group Roster</h3>
+            <h3>Team Members</h3>
             <p id="team-login-status-warning" class="login-status-warning" hidden></p>
             <ul id="team-list" class="log-list">
               <li class="empty-state">No team members listed yet.</li>
@@ -439,16 +460,27 @@
                 <input type="text" id="group-name" placeholder="e.g., Local Outreach Group" required>
               </div>
               <div class="form-group">
+                <label for="group-country">Group Country</label>
+                <input type="text" id="group-country" placeholder="e.g., United States" autocomplete="country-name">
+              </div>
+              <label class="checkbox-label" for="new-group-needgod">
+                <input type="checkbox" id="new-group-needgod">
+                <span>NeedGod.net</span>
+              </label>
+              <div class="form-group">
                 <label for="new-group-timezone">Group Timezone</label>
                 <select id="new-group-timezone" required></select>
               </div>
+
               <button type="submit" class="btn primary">Create Group & Appoint Director</button>
             </form>
           </div>
 
           <div class="card">
             <h3>All Local Groups & Directors</h3>
+            <p class="subtitle">NeedGod.net group categories are only visible to System Admins.</p>
             <p id="admin-login-status-warning" class="login-status-warning" hidden></p>
+            <p id="admin-category-status-warning" class="login-status-warning" hidden></p>
             <ul id="director-list" class="log-list">
               <li class="empty-state">No directors assigned yet.</li>
             </ul>
@@ -731,11 +763,23 @@
       </div>
     </div>
 
+    <!-- VERSIONED UPDATE NOTICE -->
+    <div id="app-update-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="app-update-title" aria-describedby="app-update-message">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h3 id="app-update-title">What’s New</h3>
+        </div>
+        <p id="app-update-version" class="subtitle"></p>
+        <p id="app-update-message" class="app-update-message"></p>
+        <button type="button" id="acknowledge-app-update-btn" class="btn primary">Got it</button>
+      </div>
+    </div>
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=23"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
